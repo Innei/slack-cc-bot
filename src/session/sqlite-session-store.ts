@@ -1,81 +1,49 @@
-import Database from 'better-sqlite3';
+import { eq } from 'drizzle-orm';
 
+import type { AppDatabase } from '../db/index.js';
+import { sessions } from '../db/schema.js';
 import type { AppLogger } from '../logger/index.js';
 import type { SessionRecord, SessionStore } from './types.js';
 
-interface SessionRow {
-  bootstrap_message_ts: string | null;
-  channel_id: string;
-  claude_session_id: string | null;
-  created_at: string;
-  root_message_ts: string;
-  stream_message_ts: string | null;
-  thread_ts: string;
-  updated_at: string;
-}
-
-function rowToRecord(row: SessionRow): SessionRecord {
-  const record: SessionRecord = {
-    channelId: row.channel_id,
-    createdAt: row.created_at,
-    rootMessageTs: row.root_message_ts,
-    threadTs: row.thread_ts,
-    updatedAt: row.updated_at,
-  };
-  if (row.bootstrap_message_ts !== null) record.bootstrapMessageTs = row.bootstrap_message_ts;
-  if (row.claude_session_id !== null) record.claudeSessionId = row.claude_session_id;
-  if (row.stream_message_ts !== null) record.streamMessageTs = row.stream_message_ts;
-  return record;
-}
-
 export class SqliteSessionStore implements SessionStore {
-  private readonly db: Database.Database;
-
   constructor(
-    dbPath: string,
+    private readonly db: AppDatabase,
     private readonly logger: AppLogger,
-  ) {
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL');
-
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS sessions (
-        thread_ts TEXT PRIMARY KEY,
-        channel_id TEXT NOT NULL,
-        root_message_ts TEXT NOT NULL,
-        bootstrap_message_ts TEXT,
-        stream_message_ts TEXT,
-        claude_session_id TEXT,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    `);
-  }
+  ) {}
 
   get(threadTs: string): SessionRecord | undefined {
-    const row = this.db
-      .prepare<[string], SessionRow>('SELECT * FROM sessions WHERE thread_ts = ?')
-      .get(threadTs);
-    return row ? rowToRecord(row) : undefined;
+    const row = this.db.select().from(sessions).where(eq(sessions.threadTs, threadTs)).get();
+    if (!row) return undefined;
+    return this.rowToRecord(row);
   }
 
   upsert(record: SessionRecord): SessionRecord {
     this.db
-      .prepare(
-        `INSERT OR REPLACE INTO sessions
-           (thread_ts, channel_id, root_message_ts, bootstrap_message_ts, stream_message_ts, claude_session_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(
-        record.threadTs,
-        record.channelId,
-        record.rootMessageTs,
-        record.bootstrapMessageTs ?? null,
-        record.streamMessageTs ?? null,
-        record.claudeSessionId ?? null,
-        record.createdAt,
-        record.updatedAt,
-      );
+      .insert(sessions)
+      .values({
+        threadTs: record.threadTs,
+        channelId: record.channelId,
+        rootMessageTs: record.rootMessageTs,
+        bootstrapMessageTs: record.bootstrapMessageTs ?? null,
+        streamMessageTs: record.streamMessageTs ?? null,
+        claudeSessionId: record.claudeSessionId ?? null,
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+      })
+      .onConflictDoUpdate({
+        target: sessions.threadTs,
+        set: {
+          channelId: record.channelId,
+          rootMessageTs: record.rootMessageTs,
+          bootstrapMessageTs: record.bootstrapMessageTs ?? null,
+          streamMessageTs: record.streamMessageTs ?? null,
+          claudeSessionId: record.claudeSessionId ?? null,
+          createdAt: record.createdAt,
+          updatedAt: record.updatedAt,
+        },
+      })
+      .run();
+
     this.logger.debug('Upserted session record for thread %s', record.threadTs);
     return { ...record };
   }
@@ -83,41 +51,45 @@ export class SqliteSessionStore implements SessionStore {
   patch(threadTs: string, patch: Partial<SessionRecord>): SessionRecord | undefined {
     const { threadTs: _discarded, ...safePatch } = patch;
 
-    const txn = this.db.transaction(() => {
-      const existing = this.get(threadTs);
-      if (!existing) return undefined;
+    const existing = this.get(threadTs);
+    if (!existing) return undefined;
 
-      const next: SessionRecord = {
-        ...existing,
-        ...safePatch,
-        threadTs,
-        updatedAt: new Date().toISOString(),
-      };
+    const next: SessionRecord = {
+      ...existing,
+      ...safePatch,
+      threadTs,
+      updatedAt: new Date().toISOString(),
+    };
 
-      this.db
-        .prepare(
-          `UPDATE sessions
-           SET channel_id = ?, root_message_ts = ?, bootstrap_message_ts = ?, stream_message_ts = ?, claude_session_id = ?, created_at = ?, updated_at = ?
-           WHERE thread_ts = ?`,
-        )
-        .run(
-          next.channelId,
-          next.rootMessageTs,
-          next.bootstrapMessageTs ?? null,
-          next.streamMessageTs ?? null,
-          next.claudeSessionId ?? null,
-          next.createdAt,
-          next.updatedAt,
-          threadTs,
-        );
-      this.logger.debug('Patched session record for thread %s', threadTs);
-      return { ...next };
-    });
+    this.db
+      .update(sessions)
+      .set({
+        channelId: next.channelId,
+        rootMessageTs: next.rootMessageTs,
+        bootstrapMessageTs: next.bootstrapMessageTs ?? null,
+        streamMessageTs: next.streamMessageTs ?? null,
+        claudeSessionId: next.claudeSessionId ?? null,
+        createdAt: next.createdAt,
+        updatedAt: next.updatedAt,
+      })
+      .where(eq(sessions.threadTs, threadTs))
+      .run();
 
-    return txn();
+    this.logger.debug('Patched session record for thread %s', threadTs);
+    return { ...next };
   }
 
-  close(): void {
-    this.db.close();
+  private rowToRecord(row: typeof sessions.$inferSelect): SessionRecord {
+    const record: SessionRecord = {
+      channelId: row.channelId,
+      createdAt: row.createdAt,
+      rootMessageTs: row.rootMessageTs,
+      threadTs: row.threadTs,
+      updatedAt: row.updatedAt,
+    };
+    if (row.bootstrapMessageTs !== null) record.bootstrapMessageTs = row.bootstrapMessageTs;
+    if (row.claudeSessionId !== null) record.claudeSessionId = row.claudeSessionId;
+    if (row.streamMessageTs !== null) record.streamMessageTs = row.streamMessageTs;
+    return record;
   }
 }
