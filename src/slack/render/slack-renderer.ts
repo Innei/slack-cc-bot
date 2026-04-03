@@ -2,9 +2,19 @@ import { env } from '../../env/server.js';
 import type { AppLogger } from '../../logger/index.js';
 import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
 import type { SlackStreamChunk, SlackWebClientLike } from '../types.js';
+import type { SlackStatusProbe } from './status-probe.js';
+
+const DEFAULT_LOADING_MESSAGES = [
+  'Reading the thread context...',
+  'Planning the next steps...',
+  'Generating a response...',
+] as const;
 
 export class SlackRenderer {
-  constructor(private readonly logger: AppLogger) {}
+  constructor(
+    private readonly logger: AppLogger,
+    private readonly statusProbe?: SlackStatusProbe,
+  ) {}
 
   async addAcknowledgementReaction(
     client: SlackWebClientLike,
@@ -20,18 +30,18 @@ export class SlackRenderer {
     this.logger.debug('Added acknowledgement reaction to message %s', messageTs);
   }
 
-  async postBootstrapReply(
+  async showThinkingIndicator(
     client: SlackWebClientLike,
     channelId: string,
     threadTs: string,
-  ): Promise<string | undefined> {
-    const response = await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: 'Claude session initialized. Streaming output will continue in this thread.',
+    loadingMessages: readonly string[] = DEFAULT_LOADING_MESSAGES,
+  ): Promise<void> {
+    await this.setUiState(client, channelId, {
+      threadTs,
+      status: 'Thinking...',
+      loadingMessages: [...loadingMessages],
+      clear: false,
     });
-
-    return response.ts;
   }
 
   async setUiState(
@@ -50,6 +60,14 @@ export class SlackRenderer {
       status: state.status ?? '',
       ...(state.loadingMessages ? { loading_messages: state.loadingMessages } : {}),
     });
+    await this.statusProbe?.recordStatus({
+      channelId,
+      clear: false,
+      ...(state.loadingMessages ? { loadingMessages: [...state.loadingMessages] } : {}),
+      recordedAt: new Date().toISOString(),
+      status: state.status ?? '',
+      threadTs: state.threadTs,
+    });
   }
 
   async clearUiState(
@@ -62,16 +80,46 @@ export class SlackRenderer {
       thread_ts: threadTs,
       status: '',
     });
+    await this.statusProbe?.recordStatus({
+      channelId,
+      clear: true,
+      recordedAt: new Date().toISOString(),
+      status: '',
+      threadTs,
+    });
+  }
+
+  async postThreadReply(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    text: string,
+  ): Promise<string | undefined> {
+    if (!text.trim()) {
+      return undefined;
+    }
+
+    const response = await client.chat.postMessage({
+      channel: channelId,
+      thread_ts: threadTs,
+      text,
+    });
+
+    return response.ts;
   }
 
   async startStream(
     client: SlackWebClientLike,
     channelId: string,
     threadTs: string,
+    recipientTeamId: string,
+    recipientUserId: string,
   ): Promise<string> {
     const response = await client.chat.startStream({
       channel: channelId,
       thread_ts: threadTs,
+      recipient_team_id: recipientTeamId,
+      recipient_user_id: recipientUserId,
       task_display_mode: 'plan',
     });
 

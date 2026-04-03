@@ -107,6 +107,7 @@ src/
 | ------------------ | --------------------------- |
 | `pnpm dev`         | Run with tsx (development)  |
 | `pnpm build`       | Compile TypeScript          |
+| `pnpm e2e:live`    | Run real Slack live E2E     |
 | `pnpm start`       | Run compiled output         |
 | `pnpm typecheck`   | Type-check without emitting |
 | `pnpm db:generate` | Generate Drizzle migrations |
@@ -125,3 +126,53 @@ All modules receive dependencies via function parameters (no global singletons).
 
 > [!NOTE]
 > Detailed specifications for each subsystem are available in [`docs/specs/`](docs/specs/).
+
+## Live E2E
+
+The repository includes a real Slack <-> Claude live E2E runner that starts the local Socket Mode app, posts a real `@mention` into a dedicated Slack channel, waits for the Claude-backed reply, and records every `assistant.threads.setStatus` payload to a local JSONL probe.
+
+### Additional prerequisites
+
+- A dedicated Slack test channel ID for `SLACK_E2E_CHANNEL_ID`
+- A user token for `SLACK_E2E_TRIGGER_USER_TOKEN` that can post into that channel
+- The existing bot token must already be installed in that channel and have the scopes listed above
+
+Recommended safety setup:
+
+- Use a dedicated Slack channel for live E2E traffic
+- Use a dedicated test user/token for the trigger account
+- Avoid reusing production channels because the runner posts real messages
+
+### Environment
+
+Add these values to your `.env`:
+
+```bash
+SLACK_E2E_ENABLED=true
+SLACK_E2E_CHANNEL_ID=C0123456789
+SLACK_E2E_TRIGGER_USER_TOKEN=xoxp-or-xoxc-...
+SLACK_E2E_STATUS_PROBE_PATH=./artifacts/slack-live-e2e/status-probe.jsonl
+SLACK_E2E_RESULT_PATH=./artifacts/slack-live-e2e/result.json
+SLACK_E2E_TIMEOUT_MS=180000
+```
+
+### Run the live E2E
+
+```bash
+pnpm e2e:live
+```
+
+The runner will:
+
+1. Start the local Socket Mode app
+2. Post a real mention into `SLACK_E2E_CHANNEL_ID`
+3. Poll Slack for the final assistant reply
+4. Read the local status probe file
+5. Save a structured result JSON to `SLACK_E2E_RESULT_PATH`
+
+The current live scenario validates the loading-message/status chain by checking for:
+
+- a tool-derived status such as `Running ReadFile (...)...`
+- a summary-like loading message generated during execution
+- a stream-event-derived loading message such as `Reading ...`
+- a final assistant reply in the Slack thread

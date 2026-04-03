@@ -28,7 +28,7 @@ export type ClaudeExecutionEvent =
       error: string;
     }
   | {
-      type: 'text-delta';
+      type: 'assistant-message';
       text: string;
     }
   | {

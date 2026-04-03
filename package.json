@@ -9,8 +9,11 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
-    "dev": "tsx src/index.ts",
+    "dev": "nodemon",
+    "e2e:live": "tsx src/e2e/live/run.ts",
     "start": "node dist/index.js",
+    "test:e2e": "vitest run",
+    "test:e2e:watch": "vitest",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "simple-git-hooks": {
@@ -42,13 +45,15 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^10.1.0",
     "lint-staged": "^16.4.0",
+    "nodemon": "3.1.14",
     "prettier": "^3.8.1",
     "prettier-plugin-packagejson": "^3.0.2",
     "prettier-plugin-sh": "^0.18.0",
     "prettier-plugin-sort-json": "^4.2.0",
     "simple-git-hooks": "^2.13.1",
     "tsx": "4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "vitest": "4.1.2"
   },
   "packageManager": "pnpm@10.33.0",
   "engines": {

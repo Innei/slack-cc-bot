@@ -23,9 +23,12 @@ const SlackGenericBlockSchema = z
 
 export const SlackMessageSchema = z
   .object({
+    channel: z.string().min(1).optional(),
+    team: z.string().min(1).optional(),
     text: z.string().default(''),
     ts: z.string().min(1),
     thread_ts: z.string().min(1).optional(),
+    subtype: z.string().optional(),
     user: z.string().optional(),
     bot_id: z.string().optional(),
     blocks: z.array(z.union([SlackSectionBlockSchema, SlackGenericBlockSchema])).optional(),

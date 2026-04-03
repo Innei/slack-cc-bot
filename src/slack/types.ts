@@ -64,6 +64,8 @@ export interface SlackChatApi {
   startStream: (args: {
     channel: string;
     thread_ts: string;
+    recipient_team_id: string;
+    recipient_user_id: string;
     task_display_mode?: 'plan';
   }) => Promise<SlackChatStreamStartResult>;
   stopStream: (args: {
