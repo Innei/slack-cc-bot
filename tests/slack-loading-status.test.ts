@@ -73,14 +73,8 @@ describe('Slack loading status test', () => {
       threadContextLoader,
       workspaceResolver,
     });
-    const {
-      client,
-      deleteCalls,
-      postMessageCalls,
-      reactionCalls,
-      statusCalls,
-      updateCalls,
-    } = createSlackClientFixture({ threadTs });
+    const { client, deleteCalls, postMessageCalls, reactionCalls, statusCalls, updateCalls } =
+      createSlackClientFixture({ threadTs });
 
     sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
       createMessageStream([
@@ -280,11 +274,11 @@ describe('Slack loading status test', () => {
     );
     expect(updateCalls).toEqual(
       expect.arrayContaining([
-      expect.objectContaining({
-        channel: 'C123',
-        text: expect.stringContaining('Inspect the Slack loading flow'),
-        ts: '1712345678.000200',
-      }),
+        expect.objectContaining({
+          channel: 'C123',
+          text: expect.stringContaining('Inspect the Slack loading flow'),
+          ts: '1712345678.000200',
+        }),
       ]),
     );
     expect(postMessageCalls[1]).toEqual({
@@ -484,7 +478,12 @@ function createMemoryStore(): MemoryStore {
 function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   client: SlackWebClientLike;
   deleteCalls: Array<{ channel: string; ts: string }>;
-  postMessageCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; thread_ts?: string }>;
+  postMessageCalls: Array<{
+    blocks?: SlackBlock[];
+    channel: string;
+    text: string;
+    thread_ts?: string;
+  }>;
   reactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
   statusCalls: Array<{
     channel_id: string;

@@ -11,8 +11,9 @@ import type { SessionRecord, SessionStore } from '../../session/types.js';
 import type { WorkspaceResolver } from '../../workspace/resolver.js';
 import type { ResolvedWorkspace, WorkspaceResolution } from '../../workspace/types.js';
 import type { SlackThreadContextLoader } from '../context/thread-context-loader.js';
+import { encodeWorkspacePickerButtonValue } from '../interactions/workspace-picker-payload.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
-import type { SlackWebClientLike } from '../types.js';
+import type { SlackBlock, SlackWebClientLike } from '../types.js';
 
 export interface SlackIngressDependencies {
   claudeExecutor: ClaudeExecutor;
@@ -243,12 +244,13 @@ export async function handleThreadConversation(
       threadTs,
       workspaceResolution.reason,
     );
-    await deps.renderer.postThreadReply(
-      client,
-      message.channel,
-      threadTs,
-      buildWorkspaceResolutionMessage(workspaceResolution),
-    );
+    const { blocks, text } = buildWorkspaceResolutionBlocks(workspaceResolution, message.text);
+    await client.chat.postMessage({
+      blocks,
+      channel: message.channel,
+      text,
+      thread_ts: threadTs,
+    });
     return;
   }
 
@@ -597,27 +599,41 @@ function resolveWorkspaceForConversation(
   return workspaceResolver.resolveFromText(messageText, 'auto');
 }
 
-function buildWorkspaceResolutionMessage(
+export const WORKSPACE_PICKER_ACTION_ID = 'workspace_picker_open_modal';
+
+function buildWorkspaceResolutionBlocks(
   resolution: Exclude<WorkspaceResolution, { status: 'unique' }>,
-): string {
+  originalMessageText: string,
+): { blocks: SlackBlock[]; text: string } {
+  let text: string;
+
   if (resolution.status === 'ambiguous') {
-    const candidates = resolution.candidates
+    const labels = resolution.candidates
       .slice(0, 5)
-      .map((candidate) => `- \`${candidate.label}\``)
-      .join('\n');
-    return [
-      "I couldn't tell which repository to use for this thread.",
-      '',
-      'Matched multiple repositories:',
-      candidates,
-      '',
-      'Mention the repo/path more explicitly, or use the Slack Message Action to choose the workspace manually.',
-    ].join('\n');
+      .map((candidate) => `\`${candidate.label}\``)
+      .join(', ');
+    text = `I couldn't tell which repository to use — matched: ${labels}`;
+  } else {
+    text = "I couldn't determine which repository to use for this thread.";
   }
 
-  return [
-    "I couldn't determine which repository to use for this thread.",
-    '',
-    'Mention the repo name or a path under the configured repo root, or use the Slack Message Action to choose the workspace manually.',
-  ].join('\n');
+  return {
+    blocks: [
+      { type: 'section', text: { type: 'mrkdwn', text } },
+      {
+        type: 'actions',
+        block_id: 'workspace_picker',
+        elements: [
+          {
+            action_id: WORKSPACE_PICKER_ACTION_ID,
+            style: 'primary',
+            text: { type: 'plain_text' as const, text: 'Choose Workspace' },
+            type: 'button' as const,
+            value: encodeWorkspacePickerButtonValue(originalMessageText),
+          },
+        ],
+      },
+    ],
+    text,
+  };
 }

@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import type {
@@ -463,7 +464,7 @@ function expandHomeDirectory(value: string): string {
     return value;
   }
 
-  return path.join(process.env.HOME ?? '~', value.slice(2));
+  return path.join(os.homedir(), value.slice(2));
 }
 
 function findExistingDirectory(targetPath: string): string | undefined {

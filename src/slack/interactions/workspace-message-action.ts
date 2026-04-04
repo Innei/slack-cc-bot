@@ -18,7 +18,7 @@ const WORKSPACE_MODE_ACTION_ID = 'workspace_mode';
 export const WORKSPACE_MESSAGE_ACTION_CALLBACK_ID = 'workspace_message_action';
 export const WORKSPACE_MODAL_CALLBACK_ID = 'workspace_selection_modal';
 
-interface WorkspaceActionMetadata {
+export interface WorkspaceActionMetadata {
   channelId: string;
   selectedMessageText: string;
   selectedMessageTs: string;
@@ -180,7 +180,7 @@ export function createWorkspaceSelectionViewHandler(deps: SlackIngressDependenci
   };
 }
 
-function createWorkspaceSelectionModal(
+export function createWorkspaceSelectionModal(
   metadata: WorkspaceActionMetadata,
   deps: SlackIngressDependencies,
   initialWorkspace: ResolvedWorkspace | undefined,

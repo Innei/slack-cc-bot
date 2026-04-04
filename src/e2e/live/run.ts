@@ -66,7 +66,7 @@ async function main(): Promise<void> {
   const targetFile =
     process.env.SLACK_E2E_TARGET_FILE?.trim() || 'src/slack/render/slack-renderer.ts';
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
-  const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
+  const botClient = new SlackApiClient(env.SLACK_E2E_BOT_TOKEN ?? env.SLACK_BOT_TOKEN);
 
   await resetSlackStatusProbeFile(env.SLACK_E2E_STATUS_PROBE_PATH);
 
@@ -458,7 +458,8 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
 function assertLiveE2EResult(result: LiveE2EResult): void {
   const failures: string[] = [];
   if (!result.matched.finalReplyObserved) failures.push('final assistant reply not observed');
-  if (!result.matched.fallbackStatusObserved) failures.push('fallback thinking status not observed');
+  if (!result.matched.fallbackStatusObserved)
+    failures.push('fallback thinking status not observed');
   if (!result.matched.toolStatus) failures.push('tool-derived status not observed');
   if (!result.matched.streamDetailLoadingMessage) {
     failures.push('stream-event-derived loading message not observed');

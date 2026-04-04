@@ -34,6 +34,11 @@ export interface SlackPostedMessageResponse {
 export interface SlackConversationRepliesResponse {
   has_more?: boolean;
   messages?: Array<{
+    blocks?: Array<{
+      block_id?: string;
+      elements?: Array<Record<string, unknown>>;
+      type?: string;
+    }>;
     bot_id?: string;
     text?: string;
     thread_ts?: string;

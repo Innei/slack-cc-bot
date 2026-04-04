@@ -51,7 +51,21 @@ export interface SlackContextBlock {
   type: 'context';
 }
 
-export type SlackBlock = SlackSectionBlock | SlackContextBlock;
+export interface SlackButtonElement {
+  action_id: string;
+  style?: 'danger' | 'primary';
+  text: SlackPlainTextObject;
+  type: 'button';
+  value?: string;
+}
+
+export interface SlackActionsBlock {
+  block_id?: string;
+  elements: SlackButtonElement[];
+  type: 'actions';
+}
+
+export type SlackBlock = SlackActionsBlock | SlackContextBlock | SlackSectionBlock;
 
 export interface SlackMarkdownTextChunk {
   text: string;

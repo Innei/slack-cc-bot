@@ -12,6 +12,7 @@ import {
   createAssistantThreadStartedHandler,
   createAssistantUserMessageHandler,
   createThreadReplyHandler,
+  WORKSPACE_PICKER_ACTION_ID,
 } from './ingress/app-mention-handler.js';
 import {
   createWorkspaceMessageActionHandler,
@@ -19,6 +20,7 @@ import {
   WORKSPACE_MESSAGE_ACTION_CALLBACK_ID,
   WORKSPACE_MODAL_CALLBACK_ID,
 } from './interactions/workspace-message-action.js';
+import { createWorkspacePickerActionHandler } from './interactions/workspace-picker-action.js';
 import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
@@ -32,10 +34,15 @@ export interface SlackApplicationDependencies {
 }
 
 export function createSlackApp(deps: SlackApplicationDependencies): App {
+  const useE2ETokens = env.SLACK_E2E_ENABLED && env.SLACK_E2E_BOT_TOKEN;
   const app = new App({
-    token: env.SLACK_BOT_TOKEN,
-    appToken: env.SLACK_APP_TOKEN,
-    signingSecret: env.SLACK_SIGNING_SECRET,
+    token: useE2ETokens ? env.SLACK_E2E_BOT_TOKEN! : env.SLACK_BOT_TOKEN,
+    appToken:
+      useE2ETokens && env.SLACK_E2E_APP_TOKEN ? env.SLACK_E2E_APP_TOKEN : env.SLACK_APP_TOKEN,
+    signingSecret:
+      useE2ETokens && env.SLACK_E2E_SIGNING_SECRET
+        ? env.SLACK_E2E_SIGNING_SECRET
+        : env.SLACK_SIGNING_SECRET,
     socketMode: true,
   });
 
@@ -62,6 +69,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     createWorkspaceMessageActionHandler(ingressDeps),
   );
   app.view(WORKSPACE_MODAL_CALLBACK_ID, createWorkspaceSelectionViewHandler(ingressDeps));
+  app.action(WORKSPACE_PICKER_ACTION_ID, createWorkspacePickerActionHandler(ingressDeps) as any);
   app.assistant(assistant);
 
   app.error(async (error) => {
