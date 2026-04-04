@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { count, eq } from 'drizzle-orm';
 
 import type { AppDatabase } from '../db/index.js';
 import { sessions } from '../db/schema.js';
@@ -10,6 +10,11 @@ export class SqliteSessionStore implements SessionStore {
     private readonly db: AppDatabase,
     private readonly logger: AppLogger,
   ) {}
+
+  countAll(): number {
+    const row = this.db.select({ value: count() }).from(sessions).get();
+    return row?.value ?? 0;
+  }
 
   get(threadTs: string): SessionRecord | undefined {
     const row = this.db.select().from(sessions).where(eq(sessions.threadTs, threadTs)).get();

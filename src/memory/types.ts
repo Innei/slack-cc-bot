@@ -29,6 +29,7 @@ export interface MemorySearchOptions {
 }
 
 export interface MemoryStore {
+  countAll: (repoId?: string) => number;
   delete: (id: string) => boolean;
   listRecent: (repoId: string, limit?: number) => MemoryRecord[];
   prune: (repoId: string) => number;

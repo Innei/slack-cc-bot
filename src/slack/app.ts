@@ -6,6 +6,7 @@ import type { AppLogger } from '../logger/index.js';
 import type { MemoryStore } from '../memory/types.js';
 import type { SessionStore } from '../session/types.js';
 import type { WorkspaceResolver } from '../workspace/resolver.js';
+import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import {
   createAppMentionHandler,
@@ -59,6 +60,12 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
 
   app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
+  registerSlashCommands(app, {
+    logger: deps.logger.withTag('slack:commands'),
+    memoryStore: deps.memoryStore,
+    sessionStore: deps.sessionStore,
+    workspaceResolver: deps.workspaceResolver,
+  });
   app.shortcut(
     { callback_id: WORKSPACE_MESSAGE_ACTION_CALLBACK_ID, type: 'message_action' },
     createWorkspaceMessageActionHandler(ingressDeps),

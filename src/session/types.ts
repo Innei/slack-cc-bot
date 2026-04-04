@@ -23,6 +23,7 @@ export function getSessionState(record: SessionRecord): SessionState {
 }
 
 export interface SessionStore {
+  countAll: () => number;
   get: (threadTs: string) => SessionRecord | undefined;
   patch: (threadTs: string, patch: Partial<SessionRecord>) => SessionRecord | undefined;
   upsert: (record: SessionRecord) => SessionRecord;

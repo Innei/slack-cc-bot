@@ -11,6 +11,7 @@ import { type AppLogger, createRootLogger } from './logger/index.js';
 import { SqliteMemoryStore } from './memory/memory-store.js';
 import { SqliteSessionStore } from './session/sqlite-session-store.js';
 import { createSlackApp } from './slack/app.js';
+import { syncSlashCommands } from './slack/commands/manifest-sync.js';
 import { WorkspaceResolver } from './workspace/resolver.js';
 
 export interface RuntimeApplication {
@@ -50,6 +51,19 @@ export function createApplication(): RuntimeApplication {
   return {
     logger,
     async start() {
+      if (env.SLACK_APP_ID && (env.SLACK_CONFIG_TOKEN || env.SLACK_CONFIG_REFRESH_TOKEN)) {
+        await syncSlashCommands({
+          appId: env.SLACK_APP_ID,
+          configToken: env.SLACK_CONFIG_TOKEN,
+          refreshToken: env.SLACK_CONFIG_REFRESH_TOKEN,
+          logger: logger.withTag('manifest'),
+        }).catch((error) => {
+          logger.warn(
+            'Slash command manifest sync failed (non-fatal): %s',
+            error instanceof Error ? error.message : String(error),
+          );
+        });
+      }
       await slackApp.start();
       logger.info('Slack Socket Mode application started.');
     },

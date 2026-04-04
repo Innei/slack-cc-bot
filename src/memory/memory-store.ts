@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { and, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gt, isNull, lte, or, sql } from 'drizzle-orm';
 
 import type { AppDatabase } from '../db/index.js';
 import { memories } from '../db/schema.js';
@@ -15,6 +15,19 @@ export class SqliteMemoryStore implements MemoryStore {
     private readonly db: AppDatabase,
     private readonly logger: AppLogger,
   ) {}
+
+  countAll(repoId?: string): number {
+    if (repoId) {
+      const row = this.db
+        .select({ value: count() })
+        .from(memories)
+        .where(eq(memories.repoId, repoId))
+        .get();
+      return row?.value ?? 0;
+    }
+    const row = this.db.select({ value: count() }).from(memories).get();
+    return row?.value ?? 0;
+  }
 
   save(input: SaveMemoryInput): MemoryRecord {
     const createdAt = new Date().toISOString();
