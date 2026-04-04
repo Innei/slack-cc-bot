@@ -3,6 +3,7 @@ dist
 logs
 .env
 .env.local
+.env.e2e
 .DS_Store
 data/
 slack-live-e2e

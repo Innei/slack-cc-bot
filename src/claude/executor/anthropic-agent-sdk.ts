@@ -96,12 +96,34 @@ type StreamToolStopEvent = {
 };
 
 export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
+  private readonly activeExecutions = new Set<Promise<void>>();
+
   constructor(
     private readonly logger: AppLogger,
     private readonly memoryStore: MemoryStore,
   ) {}
 
+  async drain(): Promise<void> {
+    if (this.activeExecutions.size > 0) {
+      this.logger.info('Draining %d active Claude execution(s)...', this.activeExecutions.size);
+      await Promise.allSettled(this.activeExecutions);
+    }
+  }
+
   async execute(request: ClaudeExecutionRequest, sink: ClaudeExecutionSink): Promise<void> {
+    const execution = this.executeInternal(request, sink);
+    this.activeExecutions.add(execution);
+    try {
+      await execution;
+    } finally {
+      this.activeExecutions.delete(execution);
+    }
+  }
+
+  private async executeInternal(
+    request: ClaudeExecutionRequest,
+    sink: ClaudeExecutionSink,
+  ): Promise<void> {
     this.logger.info('Claude Agent SDK execution requested for thread %s', request.threadTs);
 
     const mcpServer = this.createMcpServer(request, sink);

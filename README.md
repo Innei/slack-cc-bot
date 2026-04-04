@@ -168,16 +168,21 @@ Recommended safety setup:
 
 ### Environment
 
-Add these values to your `.env`:
+Copy the example and fill in real values:
 
 ```bash
-SLACK_E2E_ENABLED=true
-SLACK_E2E_CHANNEL_ID=C0123456789
-SLACK_E2E_TRIGGER_USER_TOKEN=xoxp-or-xoxc-...
-SLACK_E2E_STATUS_PROBE_PATH=./artifacts/slack-live-e2e/status-probe.jsonl
-SLACK_E2E_RESULT_PATH=./artifacts/slack-live-e2e/result.json
-SLACK_E2E_TIMEOUT_MS=180000
+cp .env.e2e.example .env.e2e
 ```
+
+| Variable                       | Description                                        |
+| ------------------------------ | -------------------------------------------------- |
+| `SLACK_E2E_CHANNEL_ID`         | Dedicated Slack channel for E2E traffic            |
+| `SLACK_E2E_TRIGGER_USER_TOKEN` | User token that can post into the test channel     |
+| `SLACK_BOT_TOKEN`              | Bot token for the E2E Slack app (overrides `.env`) |
+| `SLACK_APP_TOKEN`              | App token for the E2E Slack app (overrides `.env`) |
+| `SLACK_SIGNING_SECRET`         | Signing secret for the E2E app (overrides `.env`)  |
+
+See [`.env.e2e.example`](.env.e2e.example) for all available options. E2E configuration is kept in `.env.e2e` (separate from the main `.env`) and loaded with `override: true`, so the E2E bot tokens replace the main tokens only during E2E runs without ever touching `.env`.
 
 ### Run the live E2E
 

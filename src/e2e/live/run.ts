@@ -1,3 +1,5 @@
+import './load-e2e-env.js';
+
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -66,7 +68,7 @@ async function main(): Promise<void> {
   const targetFile =
     process.env.SLACK_E2E_TARGET_FILE?.trim() || 'src/slack/render/slack-renderer.ts';
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
-  const botClient = new SlackApiClient(env.SLACK_E2E_BOT_TOKEN ?? env.SLACK_BOT_TOKEN);
+  const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
 
   await resetSlackStatusProbeFile(env.SLACK_E2E_STATUS_PROBE_PATH);
 

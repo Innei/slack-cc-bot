@@ -55,6 +55,7 @@ export function createApplication(): RuntimeApplication {
     },
     async stop() {
       await slackApp.stop();
+      await claudeExecutor.drain();
       sqlite.close();
       logger.info('Slack Socket Mode application stopped.');
     },

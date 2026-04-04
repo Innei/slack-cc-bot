@@ -34,15 +34,10 @@ export interface SlackApplicationDependencies {
 }
 
 export function createSlackApp(deps: SlackApplicationDependencies): App {
-  const useE2ETokens = env.SLACK_E2E_ENABLED && env.SLACK_E2E_BOT_TOKEN;
   const app = new App({
-    token: useE2ETokens ? env.SLACK_E2E_BOT_TOKEN! : env.SLACK_BOT_TOKEN,
-    appToken:
-      useE2ETokens && env.SLACK_E2E_APP_TOKEN ? env.SLACK_E2E_APP_TOKEN : env.SLACK_APP_TOKEN,
-    signingSecret:
-      useE2ETokens && env.SLACK_E2E_SIGNING_SECRET
-        ? env.SLACK_E2E_SIGNING_SECRET
-        : env.SLACK_SIGNING_SECRET,
+    token: env.SLACK_BOT_TOKEN,
+    appToken: env.SLACK_APP_TOKEN,
+    signingSecret: env.SLACK_SIGNING_SECRET,
     socketMode: true,
   });
 

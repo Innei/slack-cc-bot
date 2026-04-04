@@ -1,3 +1,5 @@
+import './load-e2e-env.js';
+
 import { randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -46,7 +48,7 @@ async function main(): Promise<void> {
   const tempRepo2 = path.join(tempParentB, tempRepoName);
 
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
-  const botClient = new SlackApiClient(env.SLACK_E2E_BOT_TOKEN ?? env.SLACK_BOT_TOKEN);
+  const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
   const botIdentity = await botClient.authTest();
 
   const result: WorkspacePickerLiveResult = {

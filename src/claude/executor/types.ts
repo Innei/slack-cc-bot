@@ -54,5 +54,6 @@ export interface ClaudeExecutionSink {
 }
 
 export interface ClaudeExecutor {
+  drain: () => Promise<void>;
   execute: (request: ClaudeExecutionRequest, sink: ClaudeExecutionSink) => Promise<void>;
 }
