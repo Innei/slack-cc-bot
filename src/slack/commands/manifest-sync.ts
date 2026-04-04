@@ -139,9 +139,10 @@ async function resolveAccessToken(
   }
 
   const refreshToken = stored?.refreshToken ?? options.refreshToken;
-  if (refreshToken) {
+  const currentConfigToken = stored?.accessToken ?? options.configToken;
+  if (refreshToken && currentConfigToken) {
     logger.info('Rotating config token via refresh token...');
-    const rotated = await rotateToken(refreshToken);
+    const rotated = await rotateToken(currentConfigToken, refreshToken);
     if (rotated) {
       persistTokens(tokenStorePath, rotated, logger);
       logger.info(
@@ -157,7 +158,7 @@ async function resolveAccessToken(
       stored.refreshToken !== options.refreshToken
     ) {
       logger.info('Stored refresh token failed, trying env refresh token...');
-      const fallback = await rotateToken(options.refreshToken);
+      const fallback = await rotateToken(currentConfigToken, options.refreshToken);
       if (fallback) {
         persistTokens(tokenStorePath, fallback, logger);
         return fallback.token;
@@ -175,14 +176,21 @@ async function resolveAccessToken(
   return undefined;
 }
 
-export async function rotateToken(refreshToken: string): Promise<TokenRotateResponse | undefined> {
+export async function rotateToken(
+  configToken: string,
+  refreshToken: string,
+): Promise<TokenRotateResponse | undefined> {
   try {
+    const body = new URLSearchParams({
+      token: configToken,
+      refresh_token: refreshToken,
+    });
     const response = await fetch('https://slack.com/api/tooling.tokens.rotate', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Type': 'application/x-www-form-urlencoded; charset=utf-8',
       },
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body,
     });
 
     if (!response.ok) {

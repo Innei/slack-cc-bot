@@ -49,6 +49,14 @@ function fetchAuthBearer(init: RequestInit): string | undefined {
   return (headers as Record<string, string>).Authorization;
 }
 
+function readBodySearchParams(init: RequestInit): URLSearchParams {
+  const body = init.body;
+  if (body instanceof URLSearchParams) {
+    return body;
+  }
+  return new URLSearchParams(String(body ?? ''));
+}
+
 afterEach(() => {
   fetchMock.mockReset();
 });
@@ -64,7 +72,7 @@ describe('rotateToken', () => {
       }),
     );
 
-    const result = await rotateToken('xoxe-old-refresh');
+    const result = await rotateToken('xoxe.xoxp-current-access', 'xoxe-old-refresh');
 
     expect(result).toBeDefined();
     expect(result!.token).toBe('xoxe.xoxp-new-access');
@@ -75,20 +83,25 @@ describe('rotateToken', () => {
     expect(firstFetch).toBeDefined();
     const [url, init] = firstFetch as [string, RequestInit];
     expect(url).toBe('https://slack.com/api/tooling.tokens.rotate');
-    expect(JSON.parse(init.body as string)).toEqual({ refresh_token: 'xoxe-old-refresh' });
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe(
+      'application/x-www-form-urlencoded; charset=utf-8',
+    );
+    const body = readBodySearchParams(init);
+    expect(body.get('token')).toBe('xoxe.xoxp-current-access');
+    expect(body.get('refresh_token')).toBe('xoxe-old-refresh');
   });
 
   it('returns undefined on invalid refresh token', async () => {
     fetchMock.mockResolvedValueOnce(slackError('invalid_refresh_token'));
 
-    const result = await rotateToken('xoxe-bad-token');
+    const result = await rotateToken('xoxe.xoxp-current-access', 'xoxe-bad-token');
     expect(result).toBeUndefined();
   });
 
   it('returns undefined on network error', async () => {
     fetchMock.mockRejectedValueOnce(new Error('network error'));
 
-    const result = await rotateToken('xoxe-refresh');
+    const result = await rotateToken('xoxe.xoxp-current-access', 'xoxe-refresh');
     expect(result).toBeUndefined();
   });
 });
@@ -198,6 +211,60 @@ describe('syncSlashCommands with token rotation', () => {
     const updated = JSON.parse(fs.readFileSync(tokenStorePath, 'utf8'));
     expect(updated.accessToken).toBe('xoxe.xoxp-rotated');
     expect(updated.refreshToken).toBe('xoxe-rotated-refresh');
+  });
+
+  it('prefers the latest persisted access token for rotation', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-prefer-stored-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+    const pastExp = Math.floor(Date.now() / 1000) - 100;
+
+    fs.writeFileSync(
+      tokenStorePath,
+      JSON.stringify({
+        accessToken: 'xoxe.xoxp-stored-latest',
+        refreshToken: 'xoxe-stored-refresh',
+        expiresAt: pastExp,
+        updatedAt: new Date().toISOString(),
+      }),
+    );
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          token: 'xoxe.xoxp-rotated',
+          refresh_token: 'xoxe-rotated-refresh',
+          exp: Math.floor(Date.now() / 1000) + 43200,
+        }),
+      )
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              slash_commands: [
+                { command: '/usage', description: 'test' },
+                { command: '/workspace', description: 'test' },
+                { command: '/memory', description: 'test' },
+                { command: '/session', description: 'test' },
+              ],
+            },
+          },
+        }),
+      );
+
+    const logger = createTestLogger();
+    await syncSlashCommands({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-env-stale',
+      logger,
+      tokenStorePath,
+    });
+
+    const rotateCall = fetchMock.mock.calls[0];
+    expect(rotateCall).toBeDefined();
+    const [, init] = rotateCall as [string, RequestInit];
+    const body = readBodySearchParams(init);
+    expect(body.get('token')).toBe('xoxe.xoxp-stored-latest');
+    expect(body.get('refresh_token')).toBe('xoxe-stored-refresh');
   });
 
   it('registers missing commands via manifest update', async () => {
