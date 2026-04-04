@@ -15,6 +15,8 @@ import type { SlashCommandDependencies } from '../../slack/commands/types.js';
 import { handleUsageCommand } from '../../slack/commands/usage-command.js';
 import { handleWorkspaceCommand } from '../../slack/commands/workspace-command.js';
 import { WorkspaceResolver } from '../../workspace/resolver.js';
+import type { LiveE2EScenario } from './scenario.js';
+import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
 
 interface SlashCommandE2EResult {
@@ -177,4 +179,13 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-await main();
+export const scenario: LiveE2EScenario = {
+  id: 'slash-commands',
+  title: 'Slash Commands',
+  description:
+    'Start the app and verify /usage, /workspace, /memory, and /session commands return expected output.',
+  keywords: ['slash', 'commands', 'usage', 'workspace', 'memory', 'session'],
+  run: main,
+};
+
+runDirectly(scenario);

@@ -6,6 +6,8 @@ import path from 'node:path';
 
 import { createApplication } from '../../application.js';
 import { env } from '../../env/server.js';
+import type { LiveE2EScenario } from './scenario.js';
+import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
 
 const FOLLOW_UP_OBSERVATION_WINDOW_MS = 15_000;
@@ -315,4 +317,13 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-await main();
+export const scenario: LiveE2EScenario = {
+  id: 'thread-foreign-mention-ignore',
+  title: 'Thread Foreign Mention Ignore',
+  description:
+    'Verify the bot ignores thread replies that mention other users or are posted by the bot itself without a self-mention.',
+  keywords: ['thread', 'foreign', 'mention', 'ignore', 'reply', 'bot-self'],
+  run: main,
+};
+
+runDirectly(scenario);

@@ -7,6 +7,8 @@ import path from 'node:path';
 import { createApplication } from '../../application.js';
 import { env } from '../../env/server.js';
 import { decodeWorkspacePickerButtonValue } from '../../slack/interactions/workspace-picker-payload.js';
+import type { LiveE2EScenario } from './scenario.js';
+import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
 
 interface WorkspacePickerLiveResult {
@@ -259,4 +261,13 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-await main();
+export const scenario: LiveE2EScenario = {
+  id: 'workspace-picker',
+  title: 'Workspace Picker',
+  description:
+    'Mention the bot with an ambiguous repo name and verify it shows the interactive workspace picker with correct button payload.',
+  keywords: ['workspace', 'picker', 'interactive', 'modal', 'button', 'ambiguous'],
+  run: main,
+};
+
+runDirectly(scenario);

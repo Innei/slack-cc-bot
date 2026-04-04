@@ -10,6 +10,8 @@ import { createApplication } from '../../application.js';
 import { env } from '../../env/server.js';
 import type { SlackStatusProbeRecord } from '../../slack/render/status-probe.js';
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
+import type { LiveE2EScenario } from './scenario.js';
+import { runDirectly } from './scenario.js';
 import {
   SlackApiClient,
   type SlackConversationRepliesResponse,
@@ -549,4 +551,22 @@ function readWorkspaceRepoIdForThread(threadTs: string): string | undefined {
   }
 }
 
-await main();
+export const scenario: LiveE2EScenario = {
+  id: 'full',
+  title: 'Full Live E2E',
+  description:
+    'Two-phase test: mention with workspace binding, probe assertions, memory save, then cross-session recall.',
+  keywords: [
+    'full',
+    'mention',
+    'probe',
+    'status',
+    'memory',
+    'recall',
+    'workspace',
+    'cross-session',
+  ],
+  run: main,
+};
+
+runDirectly(scenario);

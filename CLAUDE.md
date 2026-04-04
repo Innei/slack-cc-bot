@@ -11,9 +11,11 @@ Project conventions and guidelines for AI-assisted development on **slack-cc-bot
 | `pnpm test`             | Run unit tests (Vitest)     |
 | `pnpm test:watch`       | Watch mode for unit tests   |
 | `pnpm typecheck`        | Type-check only (no emit)   |
-| `pnpm e2e`              | Full live Slack E2E         |
-| `pnpm e2e:picker`       | Workspace picker live E2E   |
-| `pnpm e2e:no-workspace` | No-workspace chat live E2E  |
+| `pnpm e2e`              | Run all live Slack E2E      |
+| `pnpm e2e -- <id>`      | Run specific scenario by id |
+| `pnpm e2e -- -i`        | Interactive scenario picker |
+| `pnpm e2e -- -l`        | List all discovered cases   |
+| `pnpm e2e -- -s <term>` | Search/filter by keyword    |
 
 ## Development workflow
 
@@ -86,7 +88,9 @@ src/
 
 ### Live E2E tests (`src/e2e/live/`)
 
-- Each scenario is a standalone `run-*.ts` file.
+- Each scenario is a standalone `run-*.ts` file that exports a `scenario` object with `id`, `title`, `description`, `keywords`, and `run`.
+- The unified CLI (`src/e2e/live/cli.ts`) auto-discovers all scenarios and supports serial all-run, interactive selection, keyword search, and direct id-based execution.
 - Uses `SlackApiClient` to post real messages and poll for replies.
 - Follows the pattern: start app → post trigger message → poll until assertions pass or timeout → write result JSON → assert.
-- Add corresponding `pnpm e2e:<name>` script in `package.json`.
+- Run a specific scenario: `pnpm e2e -- <scenario-id>`.
+- List all scenarios: `pnpm e2e -- --list`.

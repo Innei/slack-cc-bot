@@ -124,20 +124,21 @@ src/
 
 ## Scripts
 
-| Command                 | Description                    |
-| ----------------------- | ------------------------------ |
-| `pnpm dev`              | Run with tsx (development)     |
-| `pnpm build`            | Compile TypeScript             |
-| `pnpm test`             | Run Vitest test suite          |
-| `pnpm start`            | Run compiled output            |
-| `pnpm typecheck`        | Type-check without emitting    |
-| `pnpm e2e`              | Run real Slack live E2E        |
-| `pnpm e2e:commands`     | Run slash commands live E2E    |
-| `pnpm e2e:picker`       | Run workspace picker live E2E  |
-| `pnpm e2e:no-workspace` | Run no-workspace chat live E2E |
-| `pnpm db:generate`      | Generate Drizzle migrations    |
-| `pnpm db:migrate`       | Apply migrations               |
-| `pnpm db:studio`        | Open Drizzle Studio            |
+| Command                       | Description                   |
+| ----------------------------- | ----------------------------- |
+| `pnpm dev`                    | Run with tsx (development)    |
+| `pnpm build`                  | Compile TypeScript            |
+| `pnpm test`                   | Run Vitest test suite         |
+| `pnpm start`                  | Run compiled output           |
+| `pnpm typecheck`              | Type-check without emitting   |
+| `pnpm e2e`                    | Run all live Slack E2E cases  |
+| `pnpm e2e -- <id>`            | Run a specific scenario by id |
+| `pnpm e2e -- --interactive`   | Interactive scenario picker   |
+| `pnpm e2e -- --list`          | List all discovered scenarios |
+| `pnpm e2e -- --search <term>` | Search/filter by keyword      |
+| `pnpm db:generate`            | Generate Drizzle migrations   |
+| `pnpm db:migrate`             | Apply migrations              |
+| `pnpm db:studio`              | Open Drizzle Studio           |
 
 ## Architecture
 
@@ -233,20 +234,20 @@ See [`.env.e2e.example`](.env.e2e.example) for all available options. E2E config
 ### Run the live E2E
 
 ```bash
+# Run all scenarios serially (default)
 pnpm e2e
+
+# Run a specific scenario by id
+pnpm e2e -- slash-commands
+
+# Interactive scenario picker
+pnpm e2e -- --interactive
+
+# List all discovered scenarios
+pnpm e2e -- --list
+
+# Search/filter scenarios by keyword
+pnpm e2e -- --search workspace
 ```
 
-The runner will:
-
-1. Start the local Socket Mode app
-2. Post a real mention into `SLACK_E2E_CHANNEL_ID`
-3. Poll Slack for the final assistant reply
-4. Read the local status probe file
-5. Save a structured result JSON to `SLACK_E2E_RESULT_PATH`
-
-The current live scenario validates the loading-message/status chain by checking for:
-
-- a tool-derived status such as `Running ReadFile (...)...`
-- a summary-like loading message generated during execution
-- a stream-event-derived loading message such as `Reading ...`
-- a final assistant reply in the Slack thread
+The CLI auto-discovers all `run*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.

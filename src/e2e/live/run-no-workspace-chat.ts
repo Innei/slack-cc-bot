@@ -6,6 +6,8 @@ import path from 'node:path';
 
 import { createApplication } from '../../application.js';
 import { env } from '../../env/server.js';
+import type { LiveE2EScenario } from './scenario.js';
+import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
 
 interface NoWorkspaceChatResult {
@@ -182,4 +184,13 @@ function delay(ms: number): Promise<void> {
   });
 }
 
-await main();
+export const scenario: LiveE2EScenario = {
+  id: 'no-workspace-chat',
+  title: 'No-Workspace Chat',
+  description:
+    'Mention the bot with a general knowledge question and verify it replies without showing a workspace picker.',
+  keywords: ['no-workspace', 'chat', 'general', 'picker'],
+  run: main,
+};
+
+runDirectly(scenario);
