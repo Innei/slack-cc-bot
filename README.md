@@ -335,3 +335,7 @@ pnpm e2e -- --search workspace
 ```
 
 The CLI auto-discovers all `run*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
+
+## License
+
+[MIT](LICENSE) © [Innei](https://innei.in)
