@@ -3,6 +3,7 @@ import { App, Assistant } from '@slack/bolt';
 import type { ClaudeExecutor } from '../claude/executor/types.js';
 import { env } from '../env/server.js';
 import type { AppLogger } from '../logger/index.js';
+import type { MemoryStore } from '../memory/types.js';
 import type { SessionStore } from '../session/types.js';
 import type { WorkspaceResolver } from '../workspace/resolver.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
@@ -24,6 +25,7 @@ import type { SlackStatusProbe } from './render/status-probe.js';
 export interface SlackApplicationDependencies {
   claudeExecutor: ClaudeExecutor;
   logger: AppLogger;
+  memoryStore: MemoryStore;
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   workspaceResolver: WorkspaceResolver;
@@ -41,6 +43,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   const threadContextLoader = new SlackThreadContextLoader(deps.logger.withTag('slack:context'));
   const ingressDeps = {
     logger: deps.logger.withTag('slack:ingress'),
+    memoryStore: deps.memoryStore,
     renderer,
     threadContextLoader,
     sessionStore: deps.sessionStore,

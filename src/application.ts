@@ -8,6 +8,7 @@ import { createDatabase } from './db/index.js';
 import { FileSlackStatusProbe } from './e2e/live/file-slack-status-probe.js';
 import { env, validateLiveE2EEnv } from './env/server.js';
 import { type AppLogger, createRootLogger } from './logger/index.js';
+import { SqliteMemoryStore } from './memory/memory-store.js';
 import { SqliteSessionStore } from './session/sqlite-session-store.js';
 import { createSlackApp } from './slack/app.js';
 import { WorkspaceResolver } from './workspace/resolver.js';
@@ -26,6 +27,8 @@ export function createApplication(): RuntimeApplication {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
+  const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
     scanDepth: env.REPO_SCAN_DEPTH,
@@ -34,9 +37,10 @@ export function createApplication(): RuntimeApplication {
     ? new FileSlackStatusProbe(env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
 
-  const claudeExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'));
+  const claudeExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
   const slackApp: App = createSlackApp({
     logger,
+    memoryStore,
     sessionStore,
     claudeExecutor,
     workspaceResolver,

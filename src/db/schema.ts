@@ -15,3 +15,16 @@ export const sessions = sqliteTable('sessions', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const memories = sqliteTable('memories', {
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  threadTs: text('thread_ts'),
+  category: text('category', {
+    enum: ['task_completed', 'decision', 'context', 'observation'],
+  }).notNull(),
+  content: text('content').notNull(),
+  metadata: text('metadata'),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at'),
+});

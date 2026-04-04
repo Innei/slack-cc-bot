@@ -3,6 +3,7 @@ import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware }
 import type { ClaudeExecutionEvent, ClaudeExecutor } from '../../claude/executor/types.js';
 import type { AppLogger } from '../../logger/index.js';
 import { redact } from '../../logger/redact.js';
+import type { MemoryStore } from '../../memory/types.js';
 import type { ClaudeUiState } from '../../schemas/claude/publish-state.js';
 import { SlackAppMentionEventSchema } from '../../schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '../../schemas/slack/message.js';
@@ -16,6 +17,7 @@ import type { SlackWebClientLike } from '../types.js';
 export interface SlackIngressDependencies {
   claudeExecutor: ClaudeExecutor;
   logger: AppLogger;
+  memoryStore: MemoryStore;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
@@ -303,10 +305,14 @@ export async function handleThreadConversation(
     threadContext.messages.length,
   );
 
+  const recentMemories = deps.memoryStore.listRecent(workspace.repo.id, 15);
+
   let lastUiStateKey: string | undefined;
+  let lastAssistantMessage: string | undefined;
   const sink = {
     onEvent: async (event: ClaudeExecutionEvent): Promise<void> => {
       if (event.type === 'assistant-message') {
+        lastAssistantMessage = event.text;
         await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text);
         activeUiState = createDefaultThinkingUiState(threadTs);
         lastUiStateKey = JSON.stringify(activeUiState);
@@ -339,6 +345,18 @@ export async function handleThreadConversation(
         return;
       }
 
+      if (event.phase === 'completed') {
+        if (lastAssistantMessage?.trim()) {
+          deps.memoryStore.save({
+            repoId: workspace.repo.id,
+            threadTs,
+            category: 'task_completed',
+            content: truncateForMemory(lastAssistantMessage),
+          });
+        }
+        return;
+      }
+
       if (event.phase === 'failed') {
         runtimeError(
           deps.logger,
@@ -366,6 +384,7 @@ export async function handleThreadConversation(
         userId: message.user,
         mentionText: message.text,
         threadContext,
+        recentMemories,
         workspaceLabel: workspace.workspaceLabel,
         workspacePath: workspace.workspacePath,
         workspaceRepoId: workspace.repo.id,
@@ -422,6 +441,14 @@ function createDefaultThinkingUiState(threadTs: string): ClaudeUiState {
     ],
     clear: false,
   };
+}
+
+function truncateForMemory(value: string, maxLength = 500): string {
+  const normalized = value.trim().replaceAll(/\s+/g, ' ');
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
 }
 
 function resolveWorkspaceForConversation(

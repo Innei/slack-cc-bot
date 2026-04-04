@@ -25,6 +25,19 @@ export function createDatabase(dbPath: string) {
     )
   `);
 
+  sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS memories (
+      id TEXT PRIMARY KEY,
+      repo_id TEXT NOT NULL,
+      thread_ts TEXT,
+      category TEXT NOT NULL,
+      content TEXT NOT NULL,
+      metadata TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT
+    )
+  `);
+
   ensureSessionsColumn(sqlite, 'workspace_repo_id', 'TEXT');
   ensureSessionsColumn(sqlite, 'workspace_repo_path', 'TEXT');
   ensureSessionsColumn(sqlite, 'workspace_path', 'TEXT');
