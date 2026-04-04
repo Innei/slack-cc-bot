@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeAgentSdkExecutor } from '../src/claude/executor/anthropic-agent-sdk.js';
 import type { AppLogger } from '../src/logger/index.js';
+import type { MemoryStore } from '../src/memory/types.js';
 import type { SessionRecord, SessionStore } from '../src/session/types.js';
 import { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
 import {
@@ -61,6 +62,7 @@ describe('Workspace message action test', () => {
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
 
     const logger = createTestLogger();
+    const memoryStore = createMemoryStore();
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
@@ -69,6 +71,7 @@ describe('Workspace message action test', () => {
     const deps = {
       claudeExecutor: executor,
       logger,
+      memoryStore,
       renderer,
       sessionStore,
       threadContextLoader,
@@ -268,6 +271,21 @@ function createMemorySessionStore(): SessionStore {
   };
 }
 
+function createMemoryStore(): MemoryStore {
+  return {
+    delete: () => false,
+    listRecent: () => [],
+    prune: () => 0,
+    pruneAll: () => 0,
+    save: (input) => ({
+      ...input,
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+    }),
+    search: () => [],
+  };
+}
+
 function createSlackClientFixture(): {
   ackCalls: unknown[];
   client: SlackWebClientLike;
@@ -301,6 +319,7 @@ function createSlackClientFixture(): {
     },
     chat: {
       appendStream: async () => ({}),
+      delete: async () => ({}),
       postMessage: async (args) => {
         postMessageCalls.push(args);
 
@@ -312,6 +331,7 @@ function createSlackClientFixture(): {
       },
       startStream: async () => ({ ts: '1712345678.000400' }),
       stopStream: async () => ({}),
+      update: async () => ({}),
     },
     conversations: {
       replies: async (args) => ({

@@ -6,11 +6,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeAgentSdkExecutor } from '../src/claude/executor/anthropic-agent-sdk.js';
 import type { AppLogger } from '../src/logger/index.js';
+import type { MemoryStore } from '../src/memory/types.js';
 import type { SessionRecord, SessionStore } from '../src/session/types.js';
 import { SlackThreadContextLoader } from '../src/slack/context/thread-context-loader.js';
 import { createAppMentionHandler } from '../src/slack/ingress/app-mention-handler.js';
 import { SlackRenderer } from '../src/slack/render/slack-renderer.js';
-import type { SlackWebClientLike } from '../src/slack/types.js';
+import type { SlackBlock, SlackWebClientLike } from '../src/slack/types.js';
 import { WorkspaceResolver } from '../src/workspace/resolver.js';
 
 const sdkMocks = vi.hoisted(() => ({
@@ -57,6 +58,7 @@ describe('Slack loading status test', () => {
     const repoPath = path.join(repoRoot, 'slack-cc-bot');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const logger = createTestLogger();
+    const memoryStore = createMemoryStore();
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
@@ -65,14 +67,20 @@ describe('Slack loading status test', () => {
     const handler = createAppMentionHandler({
       claudeExecutor: executor,
       logger,
+      memoryStore,
       renderer,
       sessionStore,
       threadContextLoader,
       workspaceResolver,
     });
-    const { client, postMessageCalls, reactionCalls, statusCalls } = createSlackClientFixture({
-      threadTs,
-    });
+    const {
+      client,
+      deleteCalls,
+      postMessageCalls,
+      reactionCalls,
+      statusCalls,
+      updateCalls,
+    } = createSlackClientFixture({ threadTs });
 
     sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
       createMessageStream([
@@ -204,32 +212,210 @@ describe('Slack loading status test', () => {
       },
     ]);
 
-    const runtimeStatusCall = statusCalls.find(
-      (call) => call.status === 'Running ReadFile (1.2s)...',
-    );
-    expect(runtimeStatusCall).toBeDefined();
-    expect(runtimeStatusCall?.loading_messages).toEqual(
+    expect(statusCalls[0]).toEqual({
+      channel_id: 'C123',
+      loading_messages: [
+        'Reading the thread context...',
+        'Planning the next steps...',
+        'Generating a response...',
+      ],
+      status: 'Thinking...',
+      thread_ts: threadTs,
+    });
+    expect(statusCalls).toEqual(
       expect.arrayContaining([
-        'Inspecting Slack renderer status handling',
-        'Reading render/slack-renderer.ts...',
+        expect.objectContaining({
+          channel_id: 'C123',
+          status: '',
+          thread_ts: threadTs,
+        }),
       ]),
     );
+    expect(statusCalls.at(-1)).toEqual(
+      expect.objectContaining({
+        channel_id: 'C123',
+        status: '',
+        thread_ts: threadTs,
+      }),
+    );
 
-    expect(postMessageCalls).toEqual([
+    expect(postMessageCalls).toHaveLength(2);
+    expect(postMessageCalls[0]).toMatchObject({
+      channel: 'C123',
+      thread_ts: threadTs,
+    });
+    expect(postMessageCalls[0].text).not.toBe('Thinking... — Thinking...');
+    expect(postMessageCalls[0].blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: 'section',
+          text: expect.objectContaining({ text: expect.any(String) }),
+        }),
+      ]),
+    );
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: 'C123',
+          text: expect.stringContaining('Running ReadFile'),
+          ts: '1712345678.000200',
+        }),
+      ]),
+    );
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          blocks: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'context',
+              elements: expect.arrayContaining([
+                expect.objectContaining({ text: 'Inspecting Slack renderer status handling' }),
+              ]),
+            }),
+          ]),
+          channel: 'C123',
+          ts: '1712345678.000200',
+        }),
+      ]),
+    );
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+      expect.objectContaining({
+        channel: 'C123',
+        text: expect.stringContaining('Inspect the Slack loading flow'),
+        ts: '1712345678.000200',
+      }),
+      ]),
+    );
+    expect(postMessageCalls[1]).toEqual({
+      channel: 'C123',
+      text: 'Updated loading messages.',
+      thread_ts: threadTs,
+    });
+    expect(deleteCalls).toEqual([
       {
         channel: 'C123',
-        text: 'Updated loading messages.',
-        thread_ts: threadTs,
+        ts: '1712345678.000200',
       },
     ]);
 
-    expect(statusCalls.at(-1)).toEqual({
-      channel_id: 'C123',
-      status: '',
-      thread_ts: threadTs,
+    expect(sessionStore.get(threadTs)?.claudeSessionId).toBe('session-1');
+  });
+
+  it('cleans up the thread progress message when execution fails after cutover', async () => {
+    const threadTs = '1712345678.000101';
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-'));
+    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+    const logger = createTestLogger();
+    const memoryStore = createMemoryStore();
+    const sessionStore = createMemorySessionStore();
+    const renderer = new SlackRenderer(logger);
+    const threadContextLoader = new SlackThreadContextLoader(logger);
+    const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
+    const executor = new ClaudeAgentSdkExecutor(logger);
+    const handler = createAppMentionHandler({
+      claudeExecutor: executor,
+      logger,
+      memoryStore,
+      renderer,
+      sessionStore,
+      threadContextLoader,
+      workspaceResolver,
+    });
+    const { client, deleteCalls, postMessageCalls, statusCalls, updateCalls } =
+      createSlackClientFixture({ threadTs });
+
+    sdkMocks.query.mockImplementation((_request: { options: Record<string, unknown> }) =>
+      createFailingMessageStream(
+        [
+          {
+            type: 'system',
+            subtype: 'init',
+            cwd: repoPath,
+            model: 'claude-sonnet-test',
+            session_id: 'session-2',
+          },
+          {
+            type: 'system',
+            subtype: 'task_started',
+            task_id: 'task-2',
+            description: 'Inspect failure cleanup',
+          },
+          {
+            type: 'system',
+            subtype: 'task_progress',
+            task_id: 'task-2',
+            description: 'Inspect failure cleanup',
+            last_tool_name: 'ReadFile',
+            summary: 'Inspecting failure cleanup handling',
+            usage: {
+              duration_ms: 600,
+              tool_uses: 1,
+              total_tokens: 24,
+            },
+          },
+        ],
+        new Error('boom'),
+      ),
+    );
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> inspect failure cleanup in slack-cc-bot',
+        ts: threadTs,
+        type: 'app_mention',
+        user: 'U123',
+      },
     });
 
-    expect(sessionStore.get(threadTs)?.claudeSessionId).toBe('session-1');
+    expect(statusCalls[0]).toEqual({
+      channel_id: 'C123',
+      loading_messages: [
+        'Reading the thread context...',
+        'Planning the next steps...',
+        'Generating a response...',
+      ],
+      status: 'Thinking...',
+      thread_ts: threadTs,
+    });
+    expect(statusCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel_id: 'C123',
+          status: '',
+          thread_ts: threadTs,
+        }),
+      ]),
+    );
+
+    expect(postMessageCalls[0]).toMatchObject({
+      channel: 'C123',
+      thread_ts: threadTs,
+    });
+    expect(updateCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          channel: 'C123',
+          text: expect.stringContaining('Inspect failure cleanup'),
+          ts: '1712345678.000200',
+        }),
+      ]),
+    );
+    expect(postMessageCalls.at(-1)).toEqual({
+      channel: 'C123',
+      text: 'An error occurred while processing your request.',
+      thread_ts: threadTs,
+    });
+    expect(deleteCalls).toEqual([
+      {
+        channel: 'C123',
+        ts: '1712345678.000200',
+      },
+    ]);
   });
 });
 
@@ -280,9 +466,25 @@ function createMemorySessionStore(): SessionStore {
   };
 }
 
+function createMemoryStore(): MemoryStore {
+  return {
+    delete: () => false,
+    listRecent: () => [],
+    prune: () => 0,
+    pruneAll: () => 0,
+    save: (input) => ({
+      ...input,
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+    }),
+    search: () => [],
+  };
+}
+
 function createSlackClientFixture({ threadTs }: { threadTs: string }): {
   client: SlackWebClientLike;
-  postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }>;
+  deleteCalls: Array<{ channel: string; ts: string }>;
+  postMessageCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; thread_ts?: string }>;
   reactionCalls: Array<{ channel: string; name: string; timestamp: string }>;
   statusCalls: Array<{
     channel_id: string;
@@ -290,8 +492,15 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     status: string;
     thread_ts: string;
   }>;
+  updateCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; ts: string }>;
 } {
-  const postMessageCalls: Array<{ channel: string; text: string; thread_ts?: string }> = [];
+  const deleteCalls: Array<{ channel: string; ts: string }> = [];
+  const postMessageCalls: Array<{
+    blocks?: SlackBlock[];
+    channel: string;
+    text: string;
+    thread_ts?: string;
+  }> = [];
   const reactionCalls: Array<{ channel: string; name: string; timestamp: string }> = [];
   const statusCalls: Array<{
     channel_id: string;
@@ -299,6 +508,8 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     status: string;
     thread_ts: string;
   }> = [];
+  const updateCalls: Array<{ blocks?: SlackBlock[]; channel: string; text: string; ts: string }> =
+    [];
 
   const client: SlackWebClientLike = {
     assistant: {
@@ -311,12 +522,20 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
     },
     chat: {
       appendStream: async () => ({}),
+      delete: async (args) => {
+        deleteCalls.push(args);
+        return {};
+      },
       postMessage: async (args) => {
         postMessageCalls.push(args);
         return { ts: '1712345678.000200' };
       },
       startStream: async () => ({ ts: '1712345678.000300' }),
       stopStream: async () => ({}),
+      update: async (args) => {
+        updateCalls.push(args);
+        return {};
+      },
     },
     conversations: {
       replies: async () => ({
@@ -344,9 +563,11 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
 
   return {
     client,
+    deleteCalls,
     postMessageCalls,
     reactionCalls,
     statusCalls,
+    updateCalls,
   };
 }
 
@@ -354,4 +575,15 @@ async function* createMessageStream(messages: readonly unknown[]): AsyncIterable
   for (const message of messages) {
     yield message;
   }
+}
+
+async function* createFailingMessageStream(
+  messages: readonly unknown[],
+  error: Error,
+): AsyncIterable<unknown> {
+  for (const message of messages) {
+    yield message;
+  }
+
+  throw error;
 }

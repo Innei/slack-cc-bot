@@ -1,12 +1,25 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 
-import type { SlackStatusProbe, SlackStatusProbeRecord } from '../../slack/render/status-probe.js';
+import type {
+  SlackStatusProbe,
+  SlackStatusProbeProgressRecord,
+  SlackStatusProbeRecord,
+  SlackStatusProbeStatusRecord,
+} from '../../slack/render/status-probe.js';
 
 export class FileSlackStatusProbe implements SlackStatusProbe {
   constructor(private readonly outputPath: string) {}
 
-  async recordStatus(record: SlackStatusProbeRecord): Promise<void> {
+  async recordStatus(record: SlackStatusProbeStatusRecord): Promise<void> {
+    await this.appendRecord(record);
+  }
+
+  async recordProgressMessage(record: SlackStatusProbeProgressRecord): Promise<void> {
+    await this.appendRecord(record);
+  }
+
+  private async appendRecord(record: SlackStatusProbeRecord): Promise<void> {
     const absolutePath = path.resolve(process.cwd(), this.outputPath);
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.appendFile(absolutePath, `${JSON.stringify(record)}\n`, 'utf8');

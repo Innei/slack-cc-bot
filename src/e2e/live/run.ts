@@ -6,6 +6,7 @@ import Database from 'better-sqlite3';
 
 import { createApplication } from '../../application.js';
 import { env } from '../../env/server.js';
+import type { SlackStatusProbeRecord } from '../../slack/render/status-probe.js';
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import {
   SlackApiClient,
@@ -25,7 +26,11 @@ interface LiveE2EResult {
     clearCallObserved: boolean;
     crossSessionRecallObserved: boolean;
     finalReplyObserved: boolean;
+    fallbackStatusObserved: boolean;
     memorySaved: boolean;
+    progressMessageDeleted: boolean;
+    progressMessagePosted: boolean;
+    progressMessageUpdated: boolean;
     streamDetailLoadingMessage: boolean;
     summaryLikeLoadingMessage: boolean;
     toolStatus: boolean;
@@ -65,7 +70,7 @@ async function main(): Promise<void> {
 
   await resetSlackStatusProbeFile(env.SLACK_E2E_STATUS_PROBE_PATH);
 
-  const application = createApplication();
+  let application = createApplication();
   const botIdentity = await botClient.authTest();
   const triggerIdentity = await triggerClient.authTest();
   const result: LiveE2EResult = {
@@ -75,7 +80,11 @@ async function main(): Promise<void> {
       clearCallObserved: false,
       crossSessionRecallObserved: false,
       finalReplyObserved: false,
+      fallbackStatusObserved: false,
       memorySaved: false,
+      progressMessageDeleted: false,
+      progressMessagePosted: false,
+      progressMessageUpdated: false,
       streamDetailLoadingMessage: false,
       summaryLikeLoadingMessage: false,
       toolStatus: false,
@@ -106,6 +115,11 @@ async function main(): Promise<void> {
     });
     await writeLiveE2EResult(result);
     assertLiveE2EResult(result);
+
+    await application.stop();
+    application = createApplication();
+    await application.start();
+    await delay(3_000);
 
     await runPhaseTwo({
       botClient,
@@ -190,23 +204,7 @@ async function runPhaseOne(input: {
     }
 
     for (const record of input.result.probeRecords) {
-      if (isToolStatus(record.status)) {
-        input.result.matched.toolStatus = true;
-      }
-
-      if (record.clear) {
-        input.result.matched.clearCallObserved = true;
-      }
-
-      for (const message of record.loadingMessages ?? []) {
-        if (isStreamDetailLoadingMessage(message)) {
-          input.result.matched.streamDetailLoadingMessage = true;
-        }
-
-        if (isSummaryLikeLoadingMessage(message)) {
-          input.result.matched.summaryLikeLoadingMessage = true;
-        }
-      }
+      applyProbeRecordAssertions(record, input.result);
     }
 
     if (rootMessage.ts) {
@@ -311,7 +309,7 @@ function createCrossSessionRecallPrompt(
     `<@${botUserId}> LIVE_E2E_RECALL ${runId}`,
     `Use repository ${workspaceRepoId} for this task.`,
     'Use the recall_memory tool to retrieve previous workspace memories.',
-    'Find the most recent memory marker and return it exactly.',
+    `Find the memory marker that includes the run id "${runId}" and return it exactly.`,
     'Reply with exactly one bullet point.',
     `The bullet must start with "CROSS_SESSION_OK ${runId}" and include the exact marker text.`,
   ].join(' ');
@@ -384,13 +382,74 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
   return normalized.length >= 16;
 }
 
+function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: LiveE2EResult): void {
+  if (record.kind === 'status') {
+    if (record.status === 'Thinking...') {
+      result.matched.fallbackStatusObserved = true;
+    }
+
+    if (isToolStatus(record.status)) {
+      result.matched.toolStatus = true;
+    }
+
+    if (record.clear) {
+      result.matched.clearCallObserved = true;
+    }
+
+    for (const message of record.loadingMessages ?? []) {
+      if (isStreamDetailLoadingMessage(message)) {
+        result.matched.streamDetailLoadingMessage = true;
+      }
+
+      if (isSummaryLikeLoadingMessage(message)) {
+        result.matched.summaryLikeLoadingMessage = true;
+      }
+    }
+
+    return;
+  }
+
+  if (record.action === 'post') {
+    result.matched.progressMessagePosted = true;
+  } else if (record.action === 'update') {
+    result.matched.progressMessageUpdated = true;
+  } else if (record.action === 'delete') {
+    result.matched.progressMessageDeleted = true;
+  }
+
+  const text = record.text?.trim();
+  if (!text) {
+    return;
+  }
+
+  const [statusPartRaw = '', ...detailParts] = text.split(' — ');
+  const statusPart = statusPartRaw.trim();
+  if (isToolStatus(statusPart)) {
+    result.matched.toolStatus = true;
+  }
+
+  for (const part of detailParts.map((item) => item.trim()).filter(Boolean)) {
+    if (isStreamDetailLoadingMessage(part)) {
+      result.matched.streamDetailLoadingMessage = true;
+    }
+
+    if (isSummaryLikeLoadingMessage(part)) {
+      result.matched.summaryLikeLoadingMessage = true;
+    }
+  }
+}
+
 function allAssertionsSatisfied(result: LiveE2EResult): boolean {
   return (
     result.matched.finalReplyObserved &&
+    result.matched.fallbackStatusObserved &&
     result.matched.toolStatus &&
     result.matched.streamDetailLoadingMessage &&
     result.matched.summaryLikeLoadingMessage &&
     result.matched.clearCallObserved &&
+    result.matched.progressMessagePosted &&
+    result.matched.progressMessageUpdated &&
+    result.matched.progressMessageDeleted &&
     result.matched.workspaceBindingObserved &&
     result.matched.memorySaved
   );
@@ -399,6 +458,7 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
 function assertLiveE2EResult(result: LiveE2EResult): void {
   const failures: string[] = [];
   if (!result.matched.finalReplyObserved) failures.push('final assistant reply not observed');
+  if (!result.matched.fallbackStatusObserved) failures.push('fallback thinking status not observed');
   if (!result.matched.toolStatus) failures.push('tool-derived status not observed');
   if (!result.matched.streamDetailLoadingMessage) {
     failures.push('stream-event-derived loading message not observed');
@@ -406,7 +466,10 @@ function assertLiveE2EResult(result: LiveE2EResult): void {
   if (!result.matched.summaryLikeLoadingMessage) {
     failures.push('summary-like loading message not observed');
   }
-  if (!result.matched.clearCallObserved) failures.push('final clear status call not observed');
+  if (!result.matched.clearCallObserved) failures.push('clear status call not observed');
+  if (!result.matched.progressMessagePosted) failures.push('progress message post not observed');
+  if (!result.matched.progressMessageUpdated) failures.push('progress message update not observed');
+  if (!result.matched.progressMessageDeleted) failures.push('progress message delete not observed');
   if (!result.matched.workspaceBindingObserved)
     failures.push('workspace-binding reply marker not observed');
   if (!result.matched.memorySaved)

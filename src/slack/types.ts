@@ -28,6 +28,31 @@ export interface SlackChatStreamStartResult {
   ts?: string;
 }
 
+export interface SlackMrkdwnTextObject {
+  text: string;
+  type: 'mrkdwn';
+}
+
+export interface SlackPlainTextObject {
+  emoji?: boolean;
+  text: string;
+  type: 'plain_text';
+}
+
+export type SlackTextObject = SlackMrkdwnTextObject | SlackPlainTextObject;
+
+export interface SlackSectionBlock {
+  text: SlackTextObject;
+  type: 'section';
+}
+
+export interface SlackContextBlock {
+  elements: SlackMrkdwnTextObject[];
+  type: 'context';
+}
+
+export type SlackBlock = SlackSectionBlock | SlackContextBlock;
+
 export interface SlackMarkdownTextChunk {
   text: string;
   type: 'markdown_text';
@@ -56,7 +81,9 @@ export interface SlackChatApi {
     markdown_text?: string;
     chunks?: SlackStreamChunk[];
   }) => Promise<unknown>;
+  delete: (args: { channel: string; ts: string }) => Promise<unknown>;
   postMessage: (args: {
+    blocks?: SlackBlock[];
     channel: string;
     text: string;
     thread_ts?: string;
@@ -73,6 +100,12 @@ export interface SlackChatApi {
     ts: string;
     thread_ts?: string;
     markdown_text?: string;
+  }) => Promise<unknown>;
+  update: (args: {
+    blocks?: SlackBlock[];
+    channel: string;
+    text: string;
+    ts: string;
   }) => Promise<unknown>;
 }
 

@@ -287,6 +287,8 @@ export async function handleThreadConversation(
   }
 
   let activeUiState: ClaudeUiState | undefined = createDefaultThinkingUiState(threadTs);
+  let progressMessageTs: string | undefined;
+  let progressMessageActive = false;
 
   await deps.renderer.showThinkingIndicator(client, message.channel, threadTs).catch((error) => {
     deps.logger.warn('Failed to show Slack thinking indicator: %s', String(error));
@@ -309,16 +311,86 @@ export async function handleThreadConversation(
 
   let lastUiStateKey: string | undefined;
   let lastAssistantMessage: string | undefined;
+  const defaultThinkingUiState = createDefaultThinkingUiState(threadTs);
+  const defaultThinkingUiStateKey = JSON.stringify(defaultThinkingUiState);
+  const isMeaningfulRuntimeUiState = (state: ClaudeUiState): boolean => {
+    if (state.clear) {
+      return false;
+    }
+
+    if (JSON.stringify(state) === defaultThinkingUiStateKey) {
+      return false;
+    }
+
+    const normalizedStatus = state.status?.trim();
+    if (normalizedStatus && normalizedStatus !== defaultThinkingUiState.status) {
+      return true;
+    }
+
+    const meaningfulLoadingMessage = state.loadingMessages?.some((message) => {
+      const normalizedMessage = message.trim();
+      return (
+        normalizedMessage.length > 0 &&
+        normalizedMessage !== normalizedStatus &&
+        !(defaultThinkingUiState.loadingMessages ?? []).includes(normalizedMessage)
+      );
+    });
+
+    return meaningfulLoadingMessage === true;
+  };
+  const updateInFlightIndicator = async (state: ClaudeUiState): Promise<void> => {
+    if (progressMessageActive) {
+      progressMessageTs = await deps.renderer.upsertThreadProgressMessage(
+        client,
+        message.channel,
+        threadTs,
+        state,
+        progressMessageTs,
+      );
+      return;
+    }
+
+    await deps.renderer.setUiState(client, message.channel, state);
+  };
+  const activateProgressMessage = async (state: ClaudeUiState): Promise<void> => {
+    if (!progressMessageActive) {
+      progressMessageActive = true;
+      await deps.renderer.clearUiState(client, message.channel, threadTs).catch((error) => {
+        deps.logger.warn('Failed to clear fallback Slack thinking indicator: %s', String(error));
+      });
+    }
+
+    progressMessageTs = await deps.renderer.upsertThreadProgressMessage(
+      client,
+      message.channel,
+      threadTs,
+      state,
+      progressMessageTs,
+    );
+  };
   const sink = {
     onEvent: async (event: ClaudeExecutionEvent): Promise<void> => {
       if (event.type === 'assistant-message') {
         lastAssistantMessage = event.text;
         await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text);
-        activeUiState = createDefaultThinkingUiState(threadTs);
-        lastUiStateKey = JSON.stringify(activeUiState);
-        await deps.renderer.setUiState(client, message.channel, activeUiState).catch((error) => {
-          deps.logger.warn('Failed to restore Slack thinking indicator: %s', String(error));
-        });
+        if (progressMessageActive && progressMessageTs) {
+          await deps.renderer
+            .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
+            .catch((error) => {
+              deps.logger.warn(
+                'Failed to reset thread progress message after assistant reply: %s',
+                String(error),
+              );
+            });
+          progressMessageTs = undefined;
+          progressMessageActive = false;
+        } else {
+          activeUiState = defaultThinkingUiState;
+          lastUiStateKey = defaultThinkingUiStateKey;
+          await updateInFlightIndicator(activeUiState).catch((error) => {
+            deps.logger.warn('Failed to restore Slack thinking indicator: %s', String(error));
+          });
+        }
         return;
       }
 
@@ -329,7 +401,30 @@ export async function handleThreadConversation(
         }
         lastUiStateKey = nextUiStateKey;
         activeUiState = event.state.clear ? undefined : event.state;
-        await deps.renderer.setUiState(client, message.channel, event.state);
+
+        if (event.state.clear) {
+          if (progressMessageActive && progressMessageTs) {
+            await deps.renderer.deleteThreadProgressMessage(
+              client,
+              message.channel,
+              threadTs,
+              progressMessageTs,
+            );
+            progressMessageTs = undefined;
+            progressMessageActive = false;
+            return;
+          }
+
+          await deps.renderer.clearUiState(client, message.channel, threadTs);
+          return;
+        }
+
+        if (!progressMessageActive && isMeaningfulRuntimeUiState(event.state)) {
+          await activateProgressMessage(event.state);
+          return;
+        }
+
+        await updateInFlightIndicator(event.state);
         return;
       }
 
@@ -412,6 +507,13 @@ export async function handleThreadConversation(
     await deps.renderer.clearUiState(client, message.channel, threadTs).catch((err) => {
       deps.logger.warn('Failed to clear UI state: %s', String(err));
     });
+    if (progressMessageTs) {
+      await deps.renderer
+        .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
+        .catch((err) => {
+          deps.logger.warn('Failed to delete progress message: %s', String(err));
+        });
+    }
   }
 }
 
