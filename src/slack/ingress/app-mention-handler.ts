@@ -353,7 +353,8 @@ export async function handleThreadConversation(
   let activeActivityState: AgentActivityState | undefined = createDefaultThinkingState(threadTs);
   let progressMessageTs: string | undefined;
   let progressMessageActive = false;
-  const toolActivityLog: string[] = [];
+  const toolHistory = new Map<string, number>();
+  const seenActivities = new Set<string>();
 
   await deps.renderer.showThinkingIndicator(client, message.channel, threadTs).catch((error) => {
     deps.logger.warn('Failed to show Slack thinking indicator: %s', String(error));
@@ -408,6 +409,7 @@ export async function handleThreadConversation(
     ...(state.status != null ? { status: state.status } : {}),
     ...(state.activities != null ? { loadingMessages: state.activities } : {}),
     ...(state.composing != null ? { composing: state.composing } : {}),
+    ...(toolHistory.size > 0 ? { toolHistory } : {}),
     clear: state.clear ?? false,
   });
 
@@ -446,19 +448,14 @@ export async function handleThreadConversation(
       if (event.type === 'assistant-message') {
         await deps.renderer.postThreadReply(client, message.channel, threadTs, event.text, {
           ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
+          ...(toolHistory.size > 0 ? { toolHistory } : {}),
         });
         if (progressMessageActive && progressMessageTs) {
           await deps.renderer
-            .finalizeThreadProgressMessage(
-              client,
-              message.channel,
-              threadTs,
-              progressMessageTs,
-              toolActivityLog,
-            )
+            .deleteThreadProgressMessage(client, message.channel, threadTs, progressMessageTs)
             .catch((error) => {
               deps.logger.warn(
-                'Failed to finalize thread progress message after assistant reply: %s',
+                'Failed to delete thread progress message after assistant reply: %s',
                 String(error),
               );
             });
@@ -467,6 +464,8 @@ export async function handleThreadConversation(
         }
         activeActivityState = undefined;
         lastStateKey = undefined;
+        toolHistory.clear();
+        seenActivities.clear();
         await deps.renderer.clearUiState(client, message.channel, threadTs).catch((error) => {
           deps.logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
         });
@@ -482,37 +481,42 @@ export async function handleThreadConversation(
         activeActivityState = event.state.clear ? undefined : event.state;
 
         if (!event.state.clear) {
-          collectToolActivity(event.state, toolActivityLog);
+          collectToolActivity(event.state, toolHistory, seenActivities);
         }
 
         if (event.state.composing && !event.state.clear) {
           if (progressMessageActive && progressMessageTs) {
             await deps.renderer
-              .finalizeThreadProgressMessage(
+              .upsertThreadProgressMessage(
                 client,
                 message.channel,
                 threadTs,
+                {
+                  threadTs,
+                  status: 'Composing response...',
+                  loadingMessages: ['Composing response...'],
+                  ...(toolHistory.size > 0 ? { toolHistory } : {}),
+                  clear: false,
+                },
                 progressMessageTs,
-                toolActivityLog,
               )
               .catch((error) => {
                 deps.logger.warn(
-                  'Failed to finalize progress message on composing: %s',
+                  'Failed to update progress message on composing: %s',
                   String(error),
                 );
               });
-            progressMessageTs = undefined;
-            progressMessageActive = false;
+          } else {
+            await deps.renderer
+              .setUiState(client, message.channel, {
+                threadTs,
+                status: 'Composing response...',
+                clear: false,
+              })
+              .catch((error) => {
+                deps.logger.warn('Failed to set composing status: %s', String(error));
+              });
           }
-          await deps.renderer
-            .setUiState(client, message.channel, {
-              threadTs,
-              status: 'Composing response...',
-              clear: false,
-            })
-            .catch((error) => {
-              deps.logger.warn('Failed to set composing status: %s', String(error));
-            });
           return;
         }
 
@@ -630,7 +634,7 @@ export async function handleThreadConversation(
           message.channel,
           threadTs,
           progressMessageTs,
-          toolActivityLog,
+          toolHistory,
         )
         .catch((err) => {
           deps.logger.warn('Failed to finalize progress message: %s', String(err));
@@ -639,11 +643,14 @@ export async function handleThreadConversation(
   }
 }
 
-const TOOL_ACTIVITY_PATTERN =
-  /^(?:Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) /;
-const MAX_TOOL_ACTIVITY_ENTRIES = 20;
+const TOOL_VERB_PATTERN =
+  /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) (.+?)(?:\.{3})?$/;
 
-function collectToolActivity(state: AgentActivityState, log: string[]): void {
+function collectToolActivity(
+  state: AgentActivityState,
+  history: Map<string, number>,
+  seenActivities: Set<string>,
+): void {
   const candidates = [...(state.activities ?? [])];
   if (state.status?.trim()) {
     candidates.push(state.status);
@@ -651,11 +658,13 @@ function collectToolActivity(state: AgentActivityState, log: string[]): void {
 
   for (const msg of candidates) {
     const trimmed = msg.trim();
-    if (!trimmed || !TOOL_ACTIVITY_PATTERN.test(trimmed)) continue;
-    if (log.includes(trimmed)) continue;
-    if (log.length < MAX_TOOL_ACTIVITY_ENTRIES) {
-      log.push(trimmed);
-    }
+    if (!trimmed || seenActivities.has(trimmed)) continue;
+    const match = trimmed.match(TOOL_VERB_PATTERN);
+    if (!match) continue;
+    seenActivities.add(trimmed);
+    const verb = match[1]!;
+    const label = verb === 'Using' ? (match[2]!.split(/\s/)[0] ?? verb) : verb;
+    history.set(label, (history.get(label) ?? 0) + 1);
   }
 }
 
