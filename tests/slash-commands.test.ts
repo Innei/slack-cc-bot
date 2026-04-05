@@ -101,17 +101,25 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
     listForContext: (repoId, limits) => {
       const globalLimit = limits?.global ?? 5;
       const workspaceLimit = limits?.workspace ?? 10;
-      const global = records
+
+      const allGlobal = records
         .filter((r) => !r.repoId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, globalLimit);
-      const workspace = repoId
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const allWorkspace = repoId
         ? records
             .filter((r) => r.repoId === repoId)
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .slice(0, workspaceLimit)
         : [];
-      return { global, workspace };
+
+      const globalPrefs = allGlobal.filter((r) => r.category === 'preference');
+      const workspacePrefs = allWorkspace.filter((r) => r.category === 'preference');
+      const preferences = [...globalPrefs, ...workspacePrefs];
+      const prefIds = new Set(preferences.map((p) => p.id));
+
+      const global = allGlobal.filter((r) => !prefIds.has(r.id)).slice(0, globalLimit);
+      const workspace = allWorkspace.filter((r) => !prefIds.has(r.id)).slice(0, workspaceLimit);
+
+      return { global, workspace, preferences };
     },
     prune: (repoId) => {
       const before = records.length;
@@ -127,6 +135,20 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
     },
     pruneAll: () => 0,
     save: (input) => {
+      const record: MemoryRecord = {
+        ...input,
+        scope: input.repoId ? 'workspace' : 'global',
+        createdAt: new Date().toISOString(),
+        id: `mem-${records.length + 1}`,
+      };
+      records.push(record);
+      return record;
+    },
+    saveWithDedup: (input, supersedesId) => {
+      if (supersedesId) {
+        const idx = records.findIndex((r) => r.id === supersedesId);
+        if (idx >= 0) records.splice(idx, 1);
+      }
       const record: MemoryRecord = {
         ...input,
         scope: input.repoId ? 'workspace' : 'global',

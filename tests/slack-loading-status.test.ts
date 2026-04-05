@@ -283,6 +283,17 @@ describe('Slack loading status test', () => {
       ]),
     );
     expect(postMessageCalls[1]).toEqual({
+      blocks: [
+        {
+          elements: [
+            {
+              elements: [{ text: 'Updated loading messages.', type: 'text' }],
+              type: 'rich_text_section',
+            },
+          ],
+          type: 'rich_text',
+        },
+      ],
       channel: 'C123',
       text: 'Updated loading messages.',
       thread_ts: threadTs,
@@ -402,6 +413,19 @@ describe('Slack loading status test', () => {
       ]),
     );
     expect(postMessageCalls.at(-1)).toEqual({
+      blocks: [
+        {
+          elements: [
+            {
+              elements: [
+                { text: 'An error occurred while processing your request.', type: 'text' },
+              ],
+              type: 'rich_text_section',
+            },
+          ],
+          type: 'rich_text',
+        },
+      ],
       channel: 'C123',
       text: 'An error occurred while processing your request.',
       thread_ts: threadTs,
@@ -469,10 +493,16 @@ function createMemoryStore(): MemoryStore {
     delete: () => false,
     deleteAll: () => 0,
     listRecent: () => [],
-    listForContext: () => ({ global: [], workspace: [] }),
+    listForContext: () => ({ global: [], workspace: [], preferences: [] }),
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
+      ...input,
+      scope: input.repoId ? ('workspace' as const) : ('global' as const),
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+    }),
+    saveWithDedup: (input) => ({
       ...input,
       scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),
@@ -527,7 +557,6 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
       },
     },
     chat: {
-      appendStream: async () => ({}),
       delete: async (args) => {
         deleteCalls.push(args);
         return {};
@@ -536,8 +565,6 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         postMessageCalls.push(args);
         return { ts: '1712345678.000200' };
       },
-      startStream: async () => ({ ts: '1712345678.000300' }),
-      stopStream: async () => ({}),
       update: async (args) => {
         updateCalls.push(args);
         return {};

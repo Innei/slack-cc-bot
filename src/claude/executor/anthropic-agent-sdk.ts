@@ -21,6 +21,7 @@ import { createSdkMcpServer, query, tool } from '@anthropic-ai/claude-agent-sdk'
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
+import { extractImplicitMemories } from '~/memory/memory-extractor.js';
 import type { MemoryStore } from '~/memory/types.js';
 import {
   RecallMemoryToolInputSchema,
@@ -173,6 +174,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
 
     let sessionId: string | undefined;
     const runtimeUi = this.createRuntimeUiStateTracker();
+    const collectedAssistantTexts: string[] = [];
 
     try {
       await sink.onEvent({ type: 'lifecycle', phase: 'started' });
@@ -197,9 +199,14 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
             await this.publishRuntimeUiState(request.threadTs, sink, runtimeUi);
           },
           runtimeUi,
+          collectAssistantText: (text) => {
+            collectedAssistantTexts.push(text);
+          },
         });
       }
       this.logger.info('Claude SDK message stream ended (thread %s)', request.threadTs);
+
+      await this.extractAndSaveImplicitMemories(request, collectedAssistantTexts.join('\n'));
 
       await sink.onEvent({
         type: 'lifecycle',
@@ -225,6 +232,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       setSessionId: (id: string) => void;
       publishUiState: () => Promise<void>;
       runtimeUi: RuntimeUiStateTracker;
+      collectAssistantText: (text: string) => void;
     },
   ): Promise<void> {
     switch (message.type) {
@@ -356,6 +364,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
         }
         const completedText = this.extractAssistantText(assistant);
         if (completedText) {
+          handlers.collectAssistantText(completedText);
           this.logger.info(
             'Assistant message completed; emitting Slack reply payload (%d chars)',
             completedText.length,
@@ -645,21 +654,47 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       '',
       'CONVERSATION MEMORY — CRITICAL INSTRUCTIONS:',
-      'Before you finish responding to the user, you MUST call save_memory to save a brief conversation summary.',
-      'The summary should capture: what the user asked, what you did or concluded, and any key decisions.',
-      'Keep it concise (1-3 sentences). Use category "context" for conversation summaries.',
-      'If no workspace is set, save with scope "global". If a workspace is set, decide: use "workspace" for project-specific context, "global" for cross-project knowledge or user preferences.',
+      '',
+      '1. PREFERENCE DETECTION (HIGHEST PRIORITY):',
+      '   You MUST detect and save the following as SEPARATE save_memory calls with category "preference" and scope "global":',
+      '   - Nicknames / identity: "叫你…", "call you…", "your name is…", "以后叫你…"',
+      '   - How to address the user: "叫我…", "call me…", "my name is…"',
+      '   - Communication style: language, tone, formality ("用中文回复", "reply in English", "be more casual")',
+      '   - Behavioral rules: "以后都…", "from now on…", "always…", "never…", "记住…", "remember…", "don\'t forget…"',
+      '   - Any standing instruction about your behavior or identity',
+      '   When you detect ANY of these signals, immediately save a preference memory. Do NOT bury preferences inside conversation summaries.',
+      '',
+      '2. CONVERSATION SUMMARY (standard priority):',
+      '   Before finishing your response, also call save_memory with category "context" to save a brief (1-3 sentence) conversation summary.',
+      '   The summary should capture: what the user asked, what you did or concluded, and any key decisions.',
+      '   If no workspace is set, save with scope "global". If a workspace is set, decide: use "workspace" for project-specific context, "global" for cross-project knowledge.',
+      '',
+      '3. SCOPE RULES:',
+      '   - Preferences are almost always scope "global" (they apply everywhere).',
+      '   - Project-specific decisions use scope "workspace".',
+      '   - General conversation summaries default to the current scope.',
+      '',
       'This is how you maintain continuity across conversations — without it, the next session starts from zero.',
     ].join('\n');
   }
 
   private buildMemoryContext(request: ClaudeExecutionRequest): string[] {
     const ctx = request.contextMemories;
-    if (!ctx || (ctx.global.length === 0 && ctx.workspace.length === 0)) {
+    if (
+      !ctx ||
+      (ctx.global.length === 0 && ctx.workspace.length === 0 && ctx.preferences.length === 0)
+    ) {
       return ['No memories from previous sessions.', ''];
     }
 
     const lines: string[] = [];
+
+    if (ctx.preferences.length > 0) {
+      lines.push('=== YOUR IDENTITY & USER PREFERENCES (ALWAYS FOLLOW THESE) ===');
+      lines.push(...ctx.preferences.map((m, i) => `[${i + 1}] (${m.createdAt}) ${m.content}`));
+      lines.push('=== End Identity & Preferences ===');
+      lines.push('');
+    }
 
     if (ctx.global.length > 0) {
       lines.push('--- Global Memory (across all workspaces) ---');
@@ -681,6 +716,58 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
     }
 
     return lines;
+  }
+
+  private async extractAndSaveImplicitMemories(
+    request: ClaudeExecutionRequest,
+    assistantText: string,
+  ): Promise<void> {
+    try {
+      const existingMemories = this.memoryStore.search(undefined, {
+        category: 'preference',
+        limit: 50,
+      });
+      const workspacePrefs = request.workspaceRepoId
+        ? this.memoryStore.search(request.workspaceRepoId, {
+            category: 'preference',
+            limit: 50,
+          })
+        : [];
+
+      const allExisting = [...existingMemories, ...workspacePrefs];
+
+      const extracted = await extractImplicitMemories({
+        userMessage: request.mentionText,
+        assistantResponse: assistantText,
+        existingMemories: allExisting,
+        logger: this.logger,
+      });
+
+      if (extracted.length === 0) {
+        return;
+      }
+
+      this.logger.info(
+        'Memory extractor found %d implicit memories for thread %s',
+        extracted.length,
+        request.threadTs,
+      );
+
+      for (const memory of extracted) {
+        this.memoryStore.saveWithDedup(
+          {
+            category: memory.category,
+            content: memory.content,
+            threadTs: request.threadTs,
+            ...(memory.expiresAt ? { expiresAt: memory.expiresAt } : {}),
+          },
+          memory.supersedesId,
+        );
+      }
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.warn('Post-conversation memory extraction failed: %s', msg);
+    }
   }
 
   private createRuntimeUiStateTracker(): RuntimeUiStateTracker {

@@ -61,21 +61,43 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
     listForContext: (repoId, limits) => {
       const globalLimit = limits?.global ?? 5;
       const workspaceLimit = limits?.workspace ?? 10;
-      const global = records
+
+      const allGlobal = records
         .filter((r) => !r.repoId)
-        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-        .slice(0, globalLimit);
-      const workspace = repoId
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+      const allWorkspace = repoId
         ? records
             .filter((r) => r.repoId === repoId)
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
-            .slice(0, workspaceLimit)
         : [];
-      return { global, workspace };
+
+      const globalPrefs = allGlobal.filter((r) => r.category === 'preference');
+      const workspacePrefs = allWorkspace.filter((r) => r.category === 'preference');
+      const preferences = [...globalPrefs, ...workspacePrefs];
+      const prefIds = new Set(preferences.map((p) => p.id));
+
+      const global = allGlobal.filter((r) => !prefIds.has(r.id)).slice(0, globalLimit);
+      const workspace = allWorkspace.filter((r) => !prefIds.has(r.id)).slice(0, workspaceLimit);
+
+      return { global, workspace, preferences };
     },
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => {
+      const record: MemoryRecord = {
+        ...input,
+        scope: input.repoId ? 'workspace' : 'global',
+        createdAt: new Date().toISOString(),
+        id: `mem-${records.length + 1}`,
+      };
+      records.push(record);
+      return record;
+    },
+    saveWithDedup: (input, supersedesId) => {
+      if (supersedesId) {
+        const idx = records.findIndex((r) => r.id === supersedesId);
+        if (idx >= 0) records.splice(idx, 1);
+      }
       const record: MemoryRecord = {
         ...input,
         scope: input.repoId ? 'workspace' : 'global',
@@ -358,5 +380,96 @@ describe('handleMemoryCommand - global scope', () => {
     const deps = createTestDeps();
     const result = handleMemoryCommand('clear', deps);
     expect(result.text).toContain('specify');
+  });
+});
+
+describe('preference memory - listForContext', () => {
+  it('returns preferences in a separate field', () => {
+    const store = createMemoryStore([
+      makeGlobalMemory('general note'),
+      makeGlobalMemory('nickname is 小汐', { category: 'preference', id: 'pref-1' }),
+    ]);
+
+    const ctx = store.listForContext(undefined);
+    expect(ctx.preferences).toHaveLength(1);
+    expect(ctx.preferences[0]!.content).toBe('nickname is 小汐');
+    expect(ctx.preferences[0]!.category).toBe('preference');
+  });
+
+  it('preferences are excluded from the global list', () => {
+    const store = createMemoryStore([
+      makeGlobalMemory('general note'),
+      makeGlobalMemory('nickname is 小汐', { category: 'preference', id: 'pref-1' }),
+    ]);
+
+    const ctx = store.listForContext(undefined);
+    expect(ctx.global).toHaveLength(1);
+    expect(ctx.global[0]!.content).toBe('general note');
+  });
+
+  it('preferences are not subject to normal limits', () => {
+    const prefs = Array.from({ length: 8 }, (_, i) =>
+      makeGlobalMemory(`pref ${i}`, { category: 'preference', id: `pref-${i}` }),
+    );
+    const regulars = Array.from({ length: 3 }, (_, i) => makeGlobalMemory(`note ${i}`));
+    const store = createMemoryStore([...prefs, ...regulars]);
+
+    const ctx = store.listForContext(undefined, { global: 2 });
+    expect(ctx.preferences).toHaveLength(8);
+    expect(ctx.global).toHaveLength(2);
+  });
+
+  it('includes workspace preferences too', () => {
+    const store = createMemoryStore([
+      makeGlobalMemory('global pref', { category: 'preference', id: 'gp-1' }),
+      makeWorkspaceMemory('repo-a', 'workspace pref', {
+        category: 'preference',
+        id: 'wp-1',
+      }),
+      makeWorkspaceMemory('repo-a', 'workspace note'),
+    ]);
+
+    const ctx = store.listForContext('repo-a');
+    expect(ctx.preferences).toHaveLength(2);
+    expect(ctx.workspace).toHaveLength(1);
+    expect(ctx.workspace[0]!.content).toBe('workspace note');
+  });
+});
+
+describe('saveWithDedup', () => {
+  it('saves normally when no supersedes id', () => {
+    const store = createMemoryStore();
+    const saved = store.saveWithDedup({
+      category: 'preference',
+      content: 'nickname is 小汐',
+    });
+    expect(saved.content).toBe('nickname is 小汐');
+    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
+  });
+
+  it('deletes the superseded memory and saves the new one', () => {
+    const store = createMemoryStore([
+      makeGlobalMemory('nickname is 小汐', { category: 'preference', id: 'old-pref' }),
+    ]);
+
+    const saved = store.saveWithDedup(
+      { category: 'preference', content: 'nickname is 小夕' },
+      'old-pref',
+    );
+    expect(saved.content).toBe('nickname is 小夕');
+
+    const all = store.search(undefined, { category: 'preference' });
+    expect(all).toHaveLength(1);
+    expect(all[0]!.content).toBe('nickname is 小夕');
+  });
+
+  it('handles non-existent supersedes id gracefully', () => {
+    const store = createMemoryStore();
+    const saved = store.saveWithDedup(
+      { category: 'preference', content: 'some pref' },
+      'non-existent-id',
+    );
+    expect(saved.content).toBe('some pref');
+    expect(store.search(undefined, { category: 'preference' })).toHaveLength(1);
   });
 });

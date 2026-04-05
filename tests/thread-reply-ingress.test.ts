@@ -180,11 +180,8 @@ function createSlackClientFixture(): SlackWebClientLike & {
       test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }),
     },
     chat: {
-      appendStream: vi.fn().mockResolvedValue({}),
       delete: vi.fn().mockResolvedValue({}),
       postMessage: vi.fn().mockResolvedValue({ ts: '1712345678.000200' }),
-      startStream: vi.fn().mockResolvedValue({ ts: '1712345678.000300' }),
-      stopStream: vi.fn().mockResolvedValue({}),
       update: vi.fn().mockResolvedValue({}),
     },
     conversations: {
@@ -202,15 +199,11 @@ function createSlackClientFixture(): SlackWebClientLike & {
 function createRendererStub(): SlackRenderer {
   return {
     addAcknowledgementReaction: vi.fn().mockResolvedValue(undefined),
-    appendChunks: vi.fn().mockResolvedValue(undefined),
-    appendText: vi.fn().mockResolvedValue(undefined),
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
-    startStream: vi.fn().mockResolvedValue('1712345678.000300'),
-    stopStream: vi.fn().mockResolvedValue(undefined),
     upsertThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
   } as unknown as SlackRenderer;
 }
@@ -269,10 +262,16 @@ function createMemoryStore(): MemoryStore {
     delete: vi.fn().mockReturnValue(false),
     deleteAll: vi.fn().mockReturnValue(0),
     listRecent: vi.fn().mockReturnValue([]),
-    listForContext: vi.fn().mockReturnValue({ global: [], workspace: [] }),
+    listForContext: vi.fn().mockReturnValue({ global: [], workspace: [], preferences: [] }),
     prune: vi.fn().mockReturnValue(0),
     pruneAll: vi.fn().mockReturnValue(0),
     save: vi.fn().mockImplementation((input) => ({
+      ...input,
+      scope: input.repoId ? 'workspace' : 'global',
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+    })),
+    saveWithDedup: vi.fn().mockImplementation((input) => ({
       ...input,
       scope: input.repoId ? 'workspace' : 'global',
       createdAt: new Date().toISOString(),

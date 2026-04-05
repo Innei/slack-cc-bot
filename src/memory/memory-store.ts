@@ -72,6 +72,17 @@ export class SqliteMemoryStore implements MemoryStore {
     };
   }
 
+  saveWithDedup(input: SaveMemoryInput, supersedesId?: string): MemoryRecord {
+    if (supersedesId) {
+      const deleted = this.delete(supersedesId);
+      if (deleted) {
+        this.logger.debug('Dedup: deleted superseded memory %s', supersedesId);
+      }
+    }
+
+    return this.save(input);
+  }
+
   search(repoId: string | undefined, options: MemorySearchOptions = {}): MemoryRecord[] {
     const nowIso = new Date().toISOString();
     const safeLimit = normalizeLimit(options.limit);
@@ -111,10 +122,28 @@ export class SqliteMemoryStore implements MemoryStore {
     const globalLimit = limits?.global ?? DEFAULT_GLOBAL_LIMIT;
     const workspaceLimit = limits?.workspace ?? DEFAULT_WORKSPACE_LIMIT;
 
-    const global = this.search(undefined, { limit: globalLimit });
-    const workspace = repoId ? this.search(repoId, { limit: workspaceLimit }) : [];
+    const globalPrefs = this.search(undefined, { category: 'preference', limit: MAX_LIMIT });
+    const workspacePrefs = repoId
+      ? this.search(repoId, { category: 'preference', limit: MAX_LIMIT })
+      : [];
+    const preferences = [...globalPrefs, ...workspacePrefs];
 
-    return { global, workspace };
+    const prefIds = new Set(preferences.map((p) => p.id));
+
+    const global = this.search(undefined, { limit: globalLimit + preferences.length }).filter(
+      (m) => !prefIds.has(m.id),
+    );
+    const workspace = repoId
+      ? this.search(repoId, { limit: workspaceLimit + preferences.length }).filter(
+          (m) => !prefIds.has(m.id),
+        )
+      : [];
+
+    return {
+      global: global.slice(0, globalLimit),
+      workspace: workspace.slice(0, workspaceLimit),
+      preferences,
+    };
   }
 
   delete(id: string): boolean {

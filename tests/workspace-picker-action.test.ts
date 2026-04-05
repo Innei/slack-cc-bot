@@ -275,10 +275,16 @@ function createMemoryStore(): MemoryStore {
     delete: () => false,
     deleteAll: () => 0,
     listRecent: () => [],
-    listForContext: () => ({ global: [], workspace: [] }),
+    listForContext: () => ({ global: [], workspace: [], preferences: [] }),
     prune: () => 0,
     pruneAll: () => 0,
     save: (input) => ({
+      ...input,
+      scope: input.repoId ? ('workspace' as const) : ('global' as const),
+      createdAt: new Date().toISOString(),
+      id: 'memory-1',
+    }),
+    saveWithDedup: (input) => ({
       ...input,
       scope: input.repoId ? ('workspace' as const) : ('global' as const),
       createdAt: new Date().toISOString(),
@@ -330,14 +336,11 @@ function createSlackClientFixture(): {
       },
     },
     chat: {
-      appendStream: async () => ({}),
       delete: async () => ({}),
       postMessage: async (args) => {
         postMessageCalls.push(args);
         return { ts: '1712345678.000200' };
       },
-      startStream: async () => ({ ts: '1712345678.000400' }),
-      stopStream: async () => ({}),
       update: async () => ({}),
     },
     conversations: {

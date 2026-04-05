@@ -21,7 +21,7 @@ export const memories = sqliteTable('memories', {
   repoId: text('repo_id'),
   threadTs: text('thread_ts'),
   category: text('category', {
-    enum: ['task_completed', 'decision', 'context', 'observation'],
+    enum: ['task_completed', 'decision', 'context', 'observation', 'preference'],
   }).notNull(),
   content: text('content').notNull(),
   metadata: text('metadata'),

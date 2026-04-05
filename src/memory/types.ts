@@ -1,4 +1,10 @@
-export const MEMORY_CATEGORIES = ['task_completed', 'decision', 'context', 'observation'] as const;
+export const MEMORY_CATEGORIES = [
+  'task_completed',
+  'decision',
+  'context',
+  'observation',
+  'preference',
+] as const;
 
 export type MemoryCategory = (typeof MEMORY_CATEGORIES)[number];
 
@@ -33,6 +39,7 @@ export interface MemorySearchOptions {
 
 export interface ContextMemories {
   global: MemoryRecord[];
+  preferences: MemoryRecord[];
   workspace: MemoryRecord[];
 }
 
@@ -48,5 +55,6 @@ export interface MemoryStore {
   prune: (repoId?: string | null) => number;
   pruneAll: () => number;
   save: (input: SaveMemoryInput) => MemoryRecord;
+  saveWithDedup: (input: SaveMemoryInput, supersedesId?: string) => MemoryRecord;
   search: (repoId: string | undefined, options?: MemorySearchOptions) => MemoryRecord[];
 }
