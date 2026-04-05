@@ -1,6 +1,6 @@
 # slack-cc-bot
 
-Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) natively in Slack — mention the bot in any channel or thread, route the session into the right repository, and get streamed, context-aware responses with real-time UI state.
+Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) natively in Slack — mention the bot in any channel or thread, route the session into the right repository, and get context-aware replies with Slack-native rich text, live status updates, and persistent memory.
 
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)
@@ -8,22 +8,26 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 
 ## Overview
 
-**slack-cc-bot** is a production-ready scaffold for running the Claude Agent SDK inside a Slack workspace via [Socket Mode](https://api.slack.com/apis/socket-mode). It handles the full lifecycle — ingress, thread context loading, streaming output, session resumption, and UI state management — so you can focus on customizing the agent's behavior.
+**slack-cc-bot** is a production-ready scaffold for running the Claude Agent SDK inside a Slack workspace via [Socket Mode](https://api.slack.com/apis/socket-mode). It handles the full lifecycle — ingress, thread context loading, workspace resolution, progress/typing UX, rich-text reply rendering, session resumption, and layered memory management — so you can focus on customizing the agent's behavior.
 
 ### How it works
 
 1. A user `@mentions` the bot in a Slack channel/thread, or invokes the workspace Message Action on a Slack message
 2. The bot resolves the target repository/workdir from the message text or manual selection
 3. The bot fetches the full thread history and normalizes it into a prompt
-4. Claude Agent SDK runs with the resolved `cwd`, streaming text back in real time
-5. A custom MCP server (`slack-ui`) lets Claude update Slack's assistant UI status
-6. Sessions are persisted in SQLite with their bound workspace for multi-turn continuity
+4. Claude Agent SDK runs with the resolved `cwd`, emitting tool progress and response events
+5. A custom MCP server (`slack-ui`) lets Claude update Slack's assistant UI status, including thinking/progress states
+6. Slack shows a progress summary first, then switches to the native assistant typing indicator while the final answer is being generated
+7. The final reply is posted as Slack rich text blocks, optionally annotated with the active workspace, and split safely if it exceeds Slack limits
+8. Sessions plus global/workspace memories are persisted in SQLite for multi-turn continuity and preference recall
 
 ### Key features
 
-- **Streaming responses** via Slack's `chat.appendStream` API
 - **Thread-aware context** — full conversation history passed to Claude on every turn
+- **Slack-native reply UX** — progress status, retained tool-activity summary, and native assistant typing indicator while the final answer is generated
+- **Rich text rendering** — markdown replies become Slack `rich_text` blocks with support for headings, lists, quotes, code blocks, and automatic long-message splitting
 - **Session resumption** — conversations persist across bot restarts (SQLite + Drizzle ORM)
+- **Layered memory** — separate persistent preferences, global memories, and workspace memories are injected back into future turns
 - **Workspace-aware routing** — each Slack thread binds to a specific repo/workdir instead of the bot process `cwd`
 - **Message Action fallback** — manually choose a repo/path when automatic detection is missing or ambiguous
 - **Slash commands** — `/usage`, `/workspace`, `/memory`, `/session` for bot introspection and management
@@ -165,6 +169,8 @@ See [`.env.example`](.env.example) for all available options including `REPO_SCA
 
 The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH` and binds each Slack thread to a concrete workspace path. It no longer falls back to the bot process `cwd` when no repo is identified.
 
+When Slack app manifest sync is enabled, the bot can rotate Slack configuration tokens automatically on startup. Use `SLACK_CONFIG_REFRESH_TOKEN` for long-lived setup; `SLACK_CONFIG_TOKEN` remains available as a short-lived fallback.
+
 ### 3. Set up the database
 
 ```bash
@@ -234,6 +240,8 @@ Logger → Database → SessionStore → SlackApp → ClaudeExecutor
 
 All modules receive dependencies via function parameters (no global singletons). The Claude executor exposes a custom MCP server (`slack-ui`) with a single `publish_state` tool that lets the agent control Slack's assistant thread UI.
 
+Replies are rendered as Slack block content instead of raw mrkdwn text, so formatting survives the round trip from Claude to Slack. During execution, the bot keeps a compact progress message in the thread, clears the thinking state after the first reply, and uses Slack's native typing indicator while the final text is still being produced.
+
 ## Workspace routing
 
 New threads try to infer the target repository from the incoming Slack message. Mention a repo name such as `slack-cc-bot`, a relative repo path such as `team/slack-cc-bot`, or an absolute path under `REPO_ROOT_DIR`.
@@ -245,6 +253,16 @@ If the bot cannot determine the workspace confidently, use the Slack Message Act
 3. Decide whether to take over the current thread or start a new thread/session.
 
 Once a thread is bound, follow-up replies reuse the same workspace. If you switch the workspace for that thread, the bot starts a fresh Claude session instead of resuming the old one with the wrong `cwd`.
+
+## Memory model
+
+The bot keeps three layers of memory:
+
+- **Preferences** — persistent instructions such as naming, language, tone, or standing rules
+- **Global memories** — facts that should apply across workspaces
+- **Workspace memories** — repo-specific context and decisions
+
+Preference memories are injected ahead of other memories so they take priority in future turns. After each conversation, a lightweight extractor can promote implicit preferences that appeared in the exchange, which helps the bot remember things like preferred language, nicknames, or durable working rules even across restarts.
 
 > [!NOTE]
 > Detailed specifications for each subsystem are available in [`docs/specs/`](docs/specs/).
@@ -335,6 +353,8 @@ pnpm e2e -- --search workspace
 ```
 
 The CLI auto-discovers all `run*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
+
+Recent scenarios cover rich text rendering, long reply splitting, workspace label attachment, clearing the thinking state after reply, retained progress summaries, and cross-session preference memory recall.
 
 ## License
 
