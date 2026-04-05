@@ -1,12 +1,15 @@
 import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AgentExecutor } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
-import type { ContextMemories, MemoryStore  } from '~/memory/types.js';
-import type { SessionRecord, SessionStore  } from '~/session/types.js';
+import type { ContextMemories, MemoryStore } from '~/memory/types.js';
+import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace } from '~/workspace/types.js';
 
-import type { NormalizedThreadContext, SlackThreadContextLoader  } from '../context/thread-context-loader.js';
+import type {
+  NormalizedThreadContext,
+  SlackThreadContextLoader,
+} from '../context/thread-context-loader.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
@@ -40,16 +43,16 @@ export interface ThreadConversationOptions {
 
 export interface ConversationPipelineContext {
   client: SlackWebClientLike;
-  contextMemories?: ContextMemories;
+  contextMemories?: ContextMemories | undefined;
   deps: SlackIngressDependencies;
-  existingSession?: SessionRecord;
+  existingSession?: SessionRecord | undefined;
   message: ThreadConversationMessage;
 
   options: ThreadConversationOptions;
-  resumeHandle?: string;
-  threadContext?: NormalizedThreadContext;
+  resumeHandle?: string | undefined;
+  threadContext?: NormalizedThreadContext | undefined;
   threadTs: string;
-  workspace?: ResolvedWorkspace;
+  workspace?: ResolvedWorkspace | undefined;
 }
 
 export type PipelineStepResult = { action: 'continue' } | { action: 'done'; reason: string };
