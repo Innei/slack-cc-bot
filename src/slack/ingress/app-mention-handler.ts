@@ -1,48 +1,23 @@
 import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware } from '@slack/bolt';
 
-import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AgentActivityState, AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
-import type { MemoryStore } from '~/memory/types.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
-import type { SessionRecord, SessionStore } from '~/session/types.js';
+import type { SessionRecord } from '~/session/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import type { ResolvedWorkspace, WorkspaceResolution } from '~/workspace/types.js';
 
-import type { SlackThreadContextLoader } from '../context/thread-context-loader.js';
 import { encodeWorkspacePickerButtonValue } from '../interactions/workspace-picker-payload.js';
-import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackBlock, SlackWebClientLike } from '../types.js';
+import type {
+  SlackIngressDependencies,
+  ThreadConversationMessage,
+  ThreadConversationOptions,
+} from './types.js';
 
-export interface SlackIngressDependencies {
-  claudeExecutor: AgentExecutor;
-  logger: AppLogger;
-  memoryStore: MemoryStore;
-  providerRegistry?: AgentProviderRegistry;
-  renderer: SlackRenderer;
-  sessionStore: SessionStore;
-  threadContextLoader: SlackThreadContextLoader;
-  workspaceResolver: WorkspaceResolver;
-}
-
-export interface ThreadConversationMessage {
-  channel: string;
-  team: string;
-  text: string;
-  thread_ts?: string | undefined;
-  ts: string;
-  user: string;
-}
-
-interface ThreadConversationOptions {
-  addAcknowledgementReaction: boolean;
-  forceNewSession?: boolean;
-  logLabel: string;
-  rootMessageTs: string;
-  workspaceOverride?: ResolvedWorkspace;
-}
+export type { SlackIngressDependencies, ThreadConversationMessage } from './types.js';
 
 const DEFAULT_ASSISTANT_PROMPTS = [
   {
