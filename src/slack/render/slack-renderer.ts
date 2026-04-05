@@ -3,7 +3,7 @@ import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks'
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
-import type { SlackBlock, SlackMrkdwnTextObject, SlackWebClientLike } from '../types.js';
+import type { SlackBlock, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
 interface RendererUiState {
@@ -12,6 +12,7 @@ interface RendererUiState {
   loadingMessages?: string[] | undefined;
   status?: string | undefined;
   threadTs: string;
+  toolHistory?: Map<string, number> | undefined;
 }
 
 const DEFAULT_LOADING_MESSAGES = [
@@ -184,10 +185,9 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     progressMessageTs: string,
-    toolActivity?: readonly string[],
+    toolHistory?: Map<string, number>,
   ): Promise<void> {
-    const summaryItems = (toolActivity ?? []).map((entry) => entry.replace(/\.{3}$/, '')).slice(-5);
-    const summaryLine = summaryItems.length > 0 ? summaryItems.join(' · ') : 'Done';
+    const summaryLine = formatToolHistorySummary(toolHistory) ?? 'Done';
     const text = `\u2705 ${summaryLine}`;
     const blocks: SlackBlock[] = [
       {
@@ -218,7 +218,7 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
     text: string,
-    options?: { workspaceLabel?: string },
+    options?: { workspaceLabel?: string; toolHistory?: Map<string, number> },
   ): Promise<string | undefined> {
     if (!text.trim()) {
       return undefined;
@@ -229,15 +229,31 @@ export class SlackRenderer {
     });
     const batches = splitBlocksWithText(blocks);
 
-    if (options?.workspaceLabel && batches.length > 0) {
-      const first = batches[0]!;
-      first.blocks = [
-        {
+    if (batches.length > 0) {
+      const prefixBlocks: Array<{
+        type: 'context';
+        elements: Array<{ type: 'mrkdwn'; text: string }>;
+      }> = [];
+
+      if (options?.workspaceLabel) {
+        prefixBlocks.push({
           type: 'context',
           elements: [{ type: 'mrkdwn', text: `_Working in ${options.workspaceLabel}_` }],
-        },
-        ...(first.blocks ?? []),
-      ];
+        });
+      }
+
+      const toolSummary = formatToolHistorySummary(options?.toolHistory);
+      if (toolSummary) {
+        prefixBlocks.push({
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: toolSummary }],
+        });
+      }
+
+      if (prefixBlocks.length > 0) {
+        const first = batches[0]!;
+        first.blocks = [...prefixBlocks, ...(first.blocks ?? [])];
+      }
     }
 
     let lastTs: string | undefined;
@@ -262,49 +278,31 @@ export class SlackRenderer {
   }
 
   private buildProgressMessageBlocks(state: RendererUiState): SlackBlock[] {
-    const status = this.buildProgressStatusLine(state.status);
-    const contextElements = this.buildProgressContextElements(state.loadingMessages, status);
+    const blocks: SlackBlock[] = [];
 
-    return [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: status,
-        },
-      },
-      ...(contextElements.length > 0
-        ? [
-            {
-              type: 'context' as const,
-              elements: contextElements,
-            },
-          ]
-        : []),
-    ];
-  }
-
-  private buildProgressStatusLine(status: string | undefined): string {
-    const normalized = status?.trim();
-    if (!normalized) {
-      return DEFAULT_PROGRESS_STATUS;
+    const historySummary = formatToolHistorySummary(state.toolHistory);
+    if (historySummary) {
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: historySummary }],
+      });
+    } else {
+      const status = state.status?.trim() || DEFAULT_PROGRESS_STATUS;
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: status }],
+      });
     }
 
-    return normalized.endsWith('...') ? normalized : `${normalized}`;
-  }
+    const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
+    if (detail) {
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: detail }],
+      });
+    }
 
-  private buildProgressContextElements(
-    loadingMessages: readonly string[] | undefined,
-    status: string,
-  ): SlackMrkdwnTextObject[] {
-    const details = this.collectRecentProgressDetails(loadingMessages, 3).filter(
-      (detail) => detail !== status,
-    );
-
-    return details.slice(-2).map((detail) => ({
-      type: 'mrkdwn',
-      text: detail,
-    }));
+    return blocks;
   }
 
   private collectRecentProgressDetails(
@@ -351,4 +349,17 @@ export function normalizeUnderscoreEmphasis(markdown: string): string {
     }
     return `*${inner}*`;
   });
+}
+
+function formatToolHistorySummary(toolHistory?: Map<string, number>): string | undefined {
+  if (!toolHistory || toolHistory.size === 0) {
+    return undefined;
+  }
+
+  const items: string[] = [];
+  for (const [verb, count] of toolHistory) {
+    items.push(`${verb} x${count}`);
+  }
+
+  return items.join('  \u00B7  ');
 }
