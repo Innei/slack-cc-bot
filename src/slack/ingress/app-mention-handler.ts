@@ -13,6 +13,7 @@ import {
   shouldSkipBotAuthoredMessage,
   shouldSkipMessageForForeignMention,
 } from './message-filter.js';
+import { resolveAndPersistSession } from './session-manager.js';
 import type {
   SlackIngressDependencies,
   ThreadConversationMessage,
@@ -287,48 +288,14 @@ export async function handleThreadConversation(
     );
   }
 
-  const shouldResetSession =
-    options.forceNewSession === true ||
-    Boolean(
-      workspace &&
-      existingSession?.claudeSessionId &&
-      existingSession.workspacePath !== workspace.workspacePath,
-    );
-  const resumeHandle = shouldResetSession ? undefined : existingSession?.claudeSessionId;
-
-  if (existingSession) {
-    deps.sessionStore.patch(threadTs, {
-      channelId: message.channel,
-      rootMessageTs: options.rootMessageTs,
-      ...(workspace
-        ? {
-            workspaceLabel: workspace.workspaceLabel,
-            workspacePath: workspace.workspacePath,
-            workspaceRepoId: workspace.repo.id,
-            workspaceRepoPath: workspace.repo.repoPath,
-            workspaceSource: workspace.source,
-          }
-        : {}),
-      ...(shouldResetSession ? { claudeSessionId: undefined } : {}),
-    });
-  } else {
-    deps.sessionStore.upsert({
-      channelId: message.channel,
-      threadTs,
-      rootMessageTs: options.rootMessageTs,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      ...(workspace
-        ? {
-            workspaceLabel: workspace.workspaceLabel,
-            workspacePath: workspace.workspacePath,
-            workspaceRepoId: workspace.repo.id,
-            workspaceRepoPath: workspace.repo.repoPath,
-            workspaceSource: workspace.source,
-          }
-        : {}),
-    });
-  }
+  const { resumeHandle } = resolveAndPersistSession(
+    threadTs,
+    message.channel,
+    options.rootMessageTs,
+    workspace,
+    options.forceNewSession === true,
+    deps.sessionStore,
+  );
 
   let activeActivityState: AgentActivityState | undefined = createDefaultThinkingState(threadTs);
   let progressMessageTs: string | undefined;
