@@ -3,6 +3,7 @@ import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware }
 import type { AgentActivityState, AgentExecutionEvent, AgentExecutor } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
+import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
 import type { SessionRecord } from '~/session/types.js';
@@ -641,21 +642,6 @@ function collectToolActivity(
     const label = verb === 'Using' ? (match[2]!.split(/\s/)[0] ?? verb) : verb;
     history.set(label, (history.get(label) ?? 0) + 1);
   }
-}
-
-function runtimeInfo(logger: AppLogger, message: string, ...args: unknown[]): void {
-  logger.info(message, ...args);
-  console.info(message, ...args);
-}
-
-function runtimeError(logger: AppLogger, message: string, ...args: unknown[]): void {
-  logger.error(message, ...args);
-  console.error(message, ...args);
-}
-
-function runtimeWarn(logger: AppLogger, message: string, ...args: unknown[]): void {
-  logger.warn(message, ...args);
-  console.warn(message, ...args);
 }
 
 function createDefaultThinkingState(threadTs: string): AgentActivityState {
