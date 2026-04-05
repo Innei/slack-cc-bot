@@ -475,6 +475,37 @@ export async function handleThreadConversation(
           collectToolActivity(event.state, toolActivityLog);
         }
 
+        if (event.state.composing && !event.state.clear) {
+          if (progressMessageActive && progressMessageTs) {
+            await deps.renderer
+              .finalizeThreadProgressMessage(
+                client,
+                message.channel,
+                threadTs,
+                progressMessageTs,
+                toolActivityLog,
+              )
+              .catch((error) => {
+                deps.logger.warn(
+                  'Failed to finalize progress message on composing: %s',
+                  String(error),
+                );
+              });
+            progressMessageTs = undefined;
+            progressMessageActive = false;
+          }
+          await deps.renderer
+            .setUiState(client, message.channel, {
+              threadTs,
+              status: 'Composing response...',
+              clear: false,
+            })
+            .catch((error) => {
+              deps.logger.warn('Failed to set composing status: %s', String(error));
+            });
+          return;
+        }
+
         if (event.state.clear) {
           if (progressMessageActive && progressMessageTs) {
             await deps.renderer.deleteThreadProgressMessage(

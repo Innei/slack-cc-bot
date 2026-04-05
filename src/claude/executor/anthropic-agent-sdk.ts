@@ -71,6 +71,7 @@ interface RuntimeUiStateTracker {
   sessionStatus: string | undefined;
   systemStatuses: Partial<Record<RuntimeSystemStatusKey, string>>;
   taskStatus: RuntimeTaskStatus | undefined;
+  textStreamingActive: boolean;
   toolStatus: RuntimeToolStatus | undefined;
 }
 
@@ -776,6 +777,7 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       sessionStatus: 'Thinking...',
       systemStatuses: {},
       taskStatus: undefined,
+      textStreamingActive: false,
       toolStatus: undefined,
       activeStreamToolUses: new Map(),
     };
@@ -808,10 +810,13 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       return undefined;
     }
 
+    const composing = runtimeUi.textStreamingActive && runtimeUi.activeStreamToolUses.size === 0;
+
     return {
       threadTs,
       ...(status ? { status } : {}),
       ...(loadingMessages.length > 0 ? { loadingMessages } : {}),
+      ...(composing ? { composing: true } : {}),
       clear: false,
     };
   }
@@ -930,7 +935,19 @@ export class ClaudeAgentSdkExecutor implements ClaudeExecutor {
       | StreamToolDeltaEvent
       | StreamToolStopEvent;
 
+    if (
+      event.type === 'content_block_start' &&
+      (event.content_block as { type: string }).type === 'text'
+    ) {
+      if (!runtimeUi.textStreamingActive) {
+        runtimeUi.textStreamingActive = true;
+        return true;
+      }
+      return false;
+    }
+
     if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+      runtimeUi.textStreamingActive = false;
       runtimeUi.activeStreamToolUses.set(event.index, {
         toolName: event.content_block.name ?? 'tool',
         partialInput: '',

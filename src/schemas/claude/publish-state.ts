@@ -9,6 +9,7 @@ export const ClaudeUiStateToolInputShape = {
 export const ClaudeUiStateSchema = z
   .object({
     threadTs: z.string().min(1),
+    composing: z.boolean().optional(),
     ...ClaudeUiStateToolInputShape,
   })
   .superRefine((value, context) => {
