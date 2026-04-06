@@ -13,6 +13,7 @@ export interface AgentExecutionRequest {
   abortSignal?: AbortSignal;
   channelId: string;
   contextMemories?: ContextMemories;
+  executionId?: string;
   mentionText: string;
   resumeHandle?: string;
   threadContext: NormalizedThreadContext;
@@ -37,7 +38,7 @@ export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
       phase: 'stopped';
-      reason: 'user_stop';
+      reason: 'superseded' | 'user_stop';
       resumeHandle?: string;
     }
   | {

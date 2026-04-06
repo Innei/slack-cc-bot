@@ -6,6 +6,7 @@ import type { App } from '@slack/bolt';
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
 import { createDatabase } from '~/db/index.js';
+import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
 import { env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
@@ -43,8 +44,15 @@ export function createApplication(): RuntimeApplication {
   const statusProbe = env.SLACK_E2E_ENABLED
     ? new FileSlackStatusProbe(env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
+  const executionProbe = env.SLACK_E2E_ENABLED
+    ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
+    : undefined;
 
-  const ccExecutor = new ClaudeAgentSdkExecutor(logger.withTag('claude:session'), memoryStore);
+  const ccExecutor = new ClaudeAgentSdkExecutor(
+    logger.withTag('claude:session'),
+    memoryStore,
+    executionProbe,
+  );
   const providerRegistry = createProviderRegistry(
     'claude-code',
     new Map([['claude-code', ccExecutor]]),

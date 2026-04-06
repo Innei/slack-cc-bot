@@ -37,11 +37,23 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = zodParse(SlackAppMentionEventSchema, args.event, 'SlackAppMentionEvent');
-    await handleThreadConversation(args.client as SlackWebClientLike, mention, deps, {
-      logLabel: 'app mention',
-      addAcknowledgementReaction: true,
-      rootMessageTs: mention.ts,
-    });
+    await handleThreadConversation(
+      args.client as SlackWebClientLike,
+      {
+        channel: mention.channel,
+        team: mention.team,
+        text: mention.text,
+        thread_ts: mention.thread_ts,
+        ts: mention.ts,
+        user: mention.user,
+      },
+      deps,
+      {
+        logLabel: 'app mention',
+        addAcknowledgementReaction: true,
+        rootMessageTs: mention.ts,
+      },
+    );
   };
 }
 

@@ -8,3 +8,4 @@ logs
 data/
 slack-live-e2e
 .worktrees/
+*.tsbuildinfo

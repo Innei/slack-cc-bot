@@ -8,6 +8,7 @@ import { redact } from '~/logger/redact.js';
 import { extractImplicitMemories } from '~/memory/memory-extractor.js';
 import type { MemoryStore } from '~/memory/types.js';
 
+import type { ClaudeExecutionProbe, ClaudeExecutionProbeRecord } from './execution-probe.js';
 import { createAnthropicAgentSdkMcpServer } from './mcp-server.js';
 import { handleClaudeSdkMessage } from './messages.js';
 import { runPromptPipeline } from './prompt-pipeline/index.js';
@@ -76,6 +77,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
   constructor(
     private readonly logger: AppLogger,
     private readonly memoryStore: MemoryStore,
+    private readonly executionProbe?: ClaudeExecutionProbe,
   ) {}
 
   async drain(): Promise<void> {
@@ -100,6 +102,15 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     sink: AgentExecutionSink,
   ): Promise<void> {
     this.logger.info('Claude Agent SDK execution requested for thread %s', request.threadTs);
+    const probeExecutionId = request.executionId ?? 'unknown';
+    await this.recordExecutionProbe({
+      executionId: probeExecutionId,
+      kind: 'request',
+      recordedAt: new Date().toISOString(),
+      ...(request.resumeHandle ? { resumeHandle: request.resumeHandle } : {}),
+      threadTs: request.threadTs,
+      ...(request.workspacePath ? { workspacePath: request.workspacePath } : {}),
+    });
 
     const mcpServer = createAnthropicAgentSdkMcpServer(
       this.logger,
@@ -155,6 +166,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
 
     let sessionId: string | undefined;
     let sessionCwd: string | undefined;
+    let recordedSessionId: string | undefined;
     const runtimeUi = createRuntimeUiStateTracker();
     const collectedAssistantTexts: string[] = [];
     const handlers: MessageHandlers = {
@@ -171,12 +183,31 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       },
       setSessionId: (id) => {
         sessionId = id;
+        if (recordedSessionId === id) {
+          return;
+        }
+        recordedSessionId = id;
+        void this.recordExecutionProbe({
+          executionId: probeExecutionId,
+          kind: 'session',
+          recordedAt: new Date().toISOString(),
+          ...(sessionCwd ? { sessionCwd } : {}),
+          sessionId: id,
+          threadTs: request.threadTs,
+        });
       },
     };
 
     let iterator: AsyncIterator<SDKMessage> | undefined;
     try {
       await sink.onEvent({ type: 'lifecycle', phase: 'started' });
+      await this.recordExecutionProbe({
+        executionId: probeExecutionId,
+        kind: 'lifecycle',
+        phase: 'started',
+        recordedAt: new Date().toISOString(),
+        threadTs: request.threadTs,
+      });
 
       let firstMessage = true;
       this.logger.info('Waiting for Claude SDK output (thread %s)...', request.threadTs);
@@ -208,10 +239,21 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         phase: 'completed',
         ...(sessionId ? { resumeHandle: sessionId } : {}),
       });
+      await this.recordExecutionProbe({
+        executionId: probeExecutionId,
+        kind: 'lifecycle',
+        phase: 'completed',
+        recordedAt: new Date().toISOString(),
+        ...(sessionId ? { resumeHandle: sessionId } : {}),
+        threadTs: request.threadTs,
+      });
     } catch (error) {
       if (isAbortError(error)) {
+        const stopReason =
+          request.abortSignal?.reason === 'superseded' ? 'superseded' : 'user_stop';
         this.logger.info(
-          'Claude Agent SDK execution stopped (user abort, thread %s)',
+          'Claude Agent SDK execution stopped (reason=%s, thread %s)',
+          stopReason,
           request.threadTs,
         );
         await disposeAsyncIterator(iterator);
@@ -219,8 +261,17 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           await sink.onEvent({
             type: 'lifecycle',
             phase: 'stopped',
-            reason: 'user_stop',
+            reason: stopReason,
             ...(sessionId ? { resumeHandle: sessionId } : {}),
+          });
+          await this.recordExecutionProbe({
+            executionId: probeExecutionId,
+            kind: 'lifecycle',
+            phase: 'stopped',
+            reason: stopReason,
+            recordedAt: new Date().toISOString(),
+            ...(sessionId ? { resumeHandle: sessionId } : {}),
+            threadTs: request.threadTs,
           });
         } catch (publishError) {
           const msg = this.describeUnknownError(publishError);
@@ -240,11 +291,34 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         ...(sessionId ? { resumeHandle: sessionId } : {}),
         error: errorMessage,
       });
+      await this.recordExecutionProbe({
+        executionId: probeExecutionId,
+        kind: 'lifecycle',
+        phase: 'failed',
+        recordedAt: new Date().toISOString(),
+        ...(sessionId ? { resumeHandle: sessionId } : {}),
+        threadTs: request.threadTs,
+      });
     }
   }
 
   private describeUnknownError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
+  }
+
+  private async recordExecutionProbe(record: ClaudeExecutionProbeRecord): Promise<void> {
+    if (!this.executionProbe) {
+      return;
+    }
+    try {
+      await this.executionProbe.record(record);
+    } catch (error) {
+      this.logger.warn(
+        'Failed to record Claude execution probe for thread %s: %s',
+        record.threadTs,
+        this.describeUnknownError(error),
+      );
+    }
   }
 
   private async extractAndSaveImplicitMemories(

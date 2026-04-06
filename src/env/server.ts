@@ -36,6 +36,10 @@ export const env = createEnv({
       .string()
       .min(1)
       .default('./artifacts/slack-live-e2e/status-probe.jsonl'),
+    SLACK_E2E_EXECUTION_PROBE_PATH: z
+      .string()
+      .min(1)
+      .default('./artifacts/slack-live-e2e/execution-probe.jsonl'),
     SLACK_E2E_TIMEOUT_MS: optionalPositiveInteger.default(180_000),
     SLACK_E2E_TRIGGER_USER_TOKEN: z.string().min(1).optional(),
   },
@@ -63,6 +67,7 @@ export const env = createEnv({
     SLACK_E2E_CHANNEL_ID: process.env.SLACK_E2E_CHANNEL_ID,
     SLACK_E2E_RESULT_PATH: process.env.SLACK_E2E_RESULT_PATH,
     SLACK_E2E_STATUS_PROBE_PATH: process.env.SLACK_E2E_STATUS_PROBE_PATH,
+    SLACK_E2E_EXECUTION_PROBE_PATH: process.env.SLACK_E2E_EXECUTION_PROBE_PATH,
     SLACK_E2E_TIMEOUT_MS: process.env.SLACK_E2E_TIMEOUT_MS,
     SLACK_E2E_TRIGGER_USER_TOKEN: process.env.SLACK_E2E_TRIGGER_USER_TOKEN,
   },

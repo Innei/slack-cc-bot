@@ -1,7 +1,8 @@
-export type ThreadExecutionStopReason = 'user_stop';
+export type ThreadExecutionStopReason = 'superseded' | 'user_stop';
 
 export interface RegisteredThreadExecution {
   channelId: string;
+  completionPromise?: Promise<void>;
   executionId: string;
   providerId: string;
   startedAt: string;
@@ -26,6 +27,7 @@ export interface ThreadExecutionRegistry {
 
 export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
   const byThread = new Map<string, Map<string, RegisteredThreadExecution>>();
+  const stoppingByThread = new Map<string, Promise<StopAllResult>>();
   const messageToThread = new Map<string, string>();
   const threadToMessages = new Map<string, Set<string>>();
   const threadMessageOrder = new Map<string, string[]>();
@@ -128,44 +130,66 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
     },
 
     async stopAll(threadTs, reason) {
-      const bucket = byThread.get(threadTs);
-      if (!bucket) {
-        return { failed: 0, stopped: 0 };
+      const inFlightStop = stoppingByThread.get(threadTs);
+      if (inFlightStop) {
+        return inFlightStop;
       }
-      if (bucket.size === 0) {
+
+      const stopPromise = (async () => {
+        const bucket = byThread.get(threadTs);
+        if (!bucket) {
+          return { failed: 0, stopped: 0 };
+        }
+        if (bucket.size === 0) {
+          byThread.delete(threadTs);
+          return { failed: 0, stopped: 0 };
+        }
+
         byThread.delete(threadTs);
-        return { failed: 0, stopped: 0 };
-      }
+        const executions = [...bucket.values()];
 
-      byThread.delete(threadTs);
-      const executions = [...bucket.values()];
+        let stopped = 0;
+        let failed = 0;
+        const failedExecutions: RegisteredThreadExecution[] = [];
 
-      let stopped = 0;
-      let failed = 0;
-      const failedExecutions: RegisteredThreadExecution[] = [];
-
-      for (const execution of executions) {
-        try {
-          await execution.stop(reason);
-          stopped += 1;
-        } catch {
-          failed += 1;
-          failedExecutions.push(execution);
+        for (const execution of executions) {
+          try {
+            await execution.stop(reason);
+            stopped += 1;
+          } catch {
+            failed += 1;
+            failedExecutions.push(execution);
+          }
         }
-      }
 
-      if (failedExecutions.length > 0) {
-        let restoreBucket = byThread.get(threadTs);
-        if (!restoreBucket) {
-          restoreBucket = new Map();
-          byThread.set(threadTs, restoreBucket);
+        // Wait for stopped executions to fully complete (flush lifecycle events, persist session)
+        const completionPromises = executions
+          .filter((e) => e.completionPromise && !failedExecutions.includes(e))
+          .map((e) => e.completionPromise!.catch(() => {}));
+        if (completionPromises.length > 0) {
+          await Promise.allSettled(completionPromises);
         }
-        for (const execution of failedExecutions) {
-          restoreBucket.set(execution.executionId, execution);
-        }
-      }
 
-      return { failed, stopped };
+        if (failedExecutions.length > 0) {
+          let restoreBucket = byThread.get(threadTs);
+          if (!restoreBucket) {
+            restoreBucket = new Map();
+            byThread.set(threadTs, restoreBucket);
+          }
+          for (const execution of failedExecutions) {
+            restoreBucket.set(execution.executionId, execution);
+          }
+        }
+
+        return { failed, stopped };
+      })().finally(() => {
+        if (stoppingByThread.get(threadTs) === stopPromise) {
+          stoppingByThread.delete(threadTs);
+        }
+      });
+
+      stoppingByThread.set(threadTs, stopPromise);
+      return stopPromise;
     },
   };
 }

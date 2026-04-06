@@ -28,7 +28,7 @@ export interface SlackIngressDependencies {
 
 export interface ThreadConversationMessage {
   channel: string;
-  team: string;
+  team?: string | undefined;
   text: string;
   thread_ts?: string | undefined;
   ts: string;

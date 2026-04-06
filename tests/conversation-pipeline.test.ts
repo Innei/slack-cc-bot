@@ -14,6 +14,7 @@ import {
   resolveSessionStep,
   resolveWorkspaceStep,
   runConversationPipeline,
+  stopActiveExecutionsStep,
 } from '~/slack/ingress/conversation-pipeline.js';
 import type { ConversationPipelineContext, PipelineStep } from '~/slack/ingress/types.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
@@ -82,7 +83,7 @@ describe('runConversationPipeline', () => {
 
 describe('DEFAULT_CONVERSATION_STEPS', () => {
   it('exports the expected number of steps', () => {
-    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(5);
+    expect(DEFAULT_CONVERSATION_STEPS).toHaveLength(6);
   });
 
   it('contains only functions', () => {
@@ -264,6 +265,88 @@ describe('acknowledgeAndLog step', () => {
   });
 });
 
+describe('stopActiveExecutionsStep', () => {
+  it('continues when the thread is already idle', async () => {
+    const ctx = createMinimalPipelineContext();
+
+    const result = await stopActiveExecutionsStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'superseded');
+  });
+
+  it('stops active executions and refreshes session', async () => {
+    const session: SessionRecord = {
+      channelId: 'C123',
+      claudeSessionId: 'saved-session-id',
+      createdAt: '',
+      rootMessageTs: 'ts1',
+      threadTs: 'ts1',
+      updatedAt: '',
+    };
+    const ctx = createMinimalPipelineContext({
+      sessionStoreRecords: [session],
+    });
+    vi.mocked(ctx.deps.threadExecutionRegistry.listActive).mockReturnValue([
+      {
+        channelId: 'C123',
+        executionId: 'e1',
+        providerId: 'claude',
+        startedAt: '',
+        stop: vi.fn().mockResolvedValue(undefined),
+        threadTs: 'ts1',
+        userId: 'U123',
+      },
+    ]);
+    vi.mocked(ctx.deps.threadExecutionRegistry.stopAll).mockResolvedValue({
+      stopped: 1,
+      failed: 0,
+    });
+
+    const result = await stopActiveExecutionsStep(ctx);
+
+    expect(result.action).toBe('continue');
+    expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'superseded');
+    // existingSession should be refreshed from store
+    expect(ctx.existingSession?.claudeSessionId).toBe('saved-session-id');
+  });
+
+  it('waits for an in-flight stop to finish even when no executions are currently listed', async () => {
+    const ctx = createMinimalPipelineContext();
+    let unblockStop: () => void;
+    const stopBlocked = new Promise<{ failed: number; stopped: number }>((resolve) => {
+      unblockStop = () => {
+        ctx.deps.sessionStore.upsert({
+          channelId: 'C123',
+          claudeSessionId: 'persisted-after-drain',
+          createdAt: '',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+        });
+        resolve({ failed: 0, stopped: 1 });
+      };
+    });
+    vi.mocked(ctx.deps.threadExecutionRegistry.listActive).mockReturnValue([]);
+    vi.mocked(ctx.deps.threadExecutionRegistry.stopAll).mockReturnValue(stopBlocked);
+
+    let resolved = false;
+    const resultPromise = stopActiveExecutionsStep(ctx).then((result) => {
+      resolved = true;
+      return result;
+    });
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    expect(resolved).toBe(false);
+
+    unblockStop!();
+    await expect(resultPromise).resolves.toEqual({ action: 'continue' });
+    expect(ctx.existingSession?.claudeSessionId).toBe('persisted-after-drain');
+  });
+});
+
 describe('resolveWorkspaceStep step', () => {
   it('returns done when workspace is ambiguous', async () => {
     const ctx = createMinimalPipelineContext({
@@ -438,6 +521,91 @@ describe('executeAgent step', () => {
     await executeAgent(ctx);
 
     expect(unregister).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers completionPromise that resolves after execution finishes', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        claimMessage: vi.fn().mockReturnValue(true),
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+        trackMessage: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+
+    let executorResolve: () => void;
+    const executorBlock = new Promise<void>((resolve) => {
+      executorResolve = resolve;
+    });
+
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async (_req, _sink) => {
+      await executorBlock;
+    });
+
+    // Start execution in background
+    const executionPromise = executeAgent(ctx);
+
+    // Wait for executor to be called
+    await vi.waitFor(() => {
+      expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledTimes(1);
+    });
+
+    // Get the registered execution with completionPromise
+    const registered = register.mock.calls[0]?.[0] as {
+      completionPromise: Promise<void>;
+      stop: (reason?: string) => Promise<void>;
+    };
+    expect(registered.completionPromise).toBeInstanceOf(Promise);
+
+    // completionPromise should not resolve until execution is done
+    let completionResolved = false;
+    const completionWatch = registered.completionPromise.then(() => {
+      completionResolved = true;
+    });
+
+    // Give microtasks a chance to run
+    await new Promise((r) => setTimeout(r, 10));
+    expect(completionResolved).toBe(false);
+
+    // Now let the executor finish
+    executorResolve!();
+
+    // Both should resolve
+    await completionWatch;
+    await executionPromise;
+    expect(completionResolved).toBe(true);
+  });
+
+  it('stop callback passes abort reason to controller', async () => {
+    const unregister = vi.fn();
+    const register = vi.fn().mockReturnValue(unregister);
+    const ctx = createMinimalPipelineContext({
+      threadExecutionRegistry: {
+        claimMessage: vi.fn().mockReturnValue(true),
+        listActive: vi.fn(),
+        register,
+        stopAll: vi.fn(),
+        trackMessage: vi.fn(),
+      } as unknown as ThreadExecutionRegistry,
+    });
+    await prepareThreadContext(ctx);
+
+    let capturedSignal: AbortSignal | undefined;
+    vi.mocked(ctx.deps.claudeExecutor.execute).mockImplementation(async (req) => {
+      capturedSignal = req.abortSignal;
+    });
+
+    await executeAgent(ctx);
+
+    const registered = register.mock.calls[0]?.[0] as { stop: (reason?: string) => Promise<void> };
+    await registered.stop('superseded');
+
+    expect(capturedSignal?.aborted).toBe(true);
+    expect(capturedSignal?.reason).toBe('superseded');
   });
 
   it('unregisters in finally when execute rejects', async () => {

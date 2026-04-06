@@ -8,6 +8,7 @@ import {
 
 function baseExecution(
   partial: Pick<RegisteredThreadExecution, 'executionId' | 'threadTs'> & {
+    completionPromise?: RegisteredThreadExecution['completionPromise'];
     stop?: RegisteredThreadExecution['stop'];
   },
 ): RegisteredThreadExecution {
@@ -91,30 +92,87 @@ describe('createThreadExecutionRegistry', () => {
     expect(result).toEqual({ stopped: 2, failed: 1 });
   });
 
-  it('concurrent stopAll for the same thread sees an empty bucket on the second call', async () => {
+  it('concurrent stopAll for the same thread waits for the existing drain to finish', async () => {
     const registry = createThreadExecutionRegistry();
-    let unblockStop: () => void;
-    const stopBlocked = new Promise<void>((resolve) => {
-      unblockStop = resolve;
+    let unblockCompletion: () => void;
+    const completionPromise = new Promise<void>((resolve) => {
+      unblockCompletion = resolve;
     });
-    const stop = vi.fn(async (_reason: ThreadExecutionStopReason) => {
-      await stopBlocked;
-    });
-    registry.register(baseExecution({ executionId: 'e1', threadTs: 't1', stop }));
+    const stop = vi.fn().mockResolvedValue(undefined);
+    registry.register(
+      baseExecution({
+        executionId: 'e1',
+        threadTs: 't1',
+        stop,
+        completionPromise,
+      }),
+    );
 
     const first = registry.stopAll('t1', 'user_stop');
     await vi.waitFor(() => {
       expect(stop).toHaveBeenCalledTimes(1);
     });
 
-    await expect(registry.stopAll('t1', 'user_stop')).resolves.toEqual({
-      stopped: 0,
-      failed: 0,
+    let secondResolved = false;
+    const second = registry.stopAll('t1', 'user_stop').then((result) => {
+      secondResolved = true;
+      return result;
+    });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    expect(secondResolved).toBe(false);
+
+    unblockCompletion!();
+    await expect(first).resolves.toEqual({ stopped: 1, failed: 0 });
+    await expect(second).resolves.toEqual({ stopped: 1, failed: 0 });
+    expect(registry.listActive('t1')).toEqual([]);
+  });
+
+  it('stopAll waits for completionPromise to settle before returning', async () => {
+    const registry = createThreadExecutionRegistry();
+    let resolveCompletion!: () => void;
+    const completionPromise = new Promise<void>((resolve) => {
+      resolveCompletion = resolve;
+    });
+    const exec = baseExecution({ executionId: 'e1', threadTs: 't1', completionPromise });
+    registry.register(exec);
+
+    let settled = false;
+    const stopAllPromise = registry.stopAll('t1', 'superseded').then((r) => {
+      settled = true;
+      return r;
     });
 
-    unblockStop!();
-    await expect(first).resolves.toEqual({ stopped: 1, failed: 0 });
-    expect(registry.listActive('t1')).toEqual([]);
+    // give a tick for stopAll to reach the await
+    await Promise.resolve();
+    expect(settled).toBe(false);
+
+    resolveCompletion();
+    const result = await stopAllPromise;
+
+    expect(settled).toBe(true);
+    expect(result).toEqual({ stopped: 1, failed: 0 });
+  });
+
+  it('stopAll does not wait when completionPromise is absent', async () => {
+    const registry = createThreadExecutionRegistry();
+    // no completionPromise on this execution
+    const exec = baseExecution({ executionId: 'e1', threadTs: 't1' });
+    registry.register(exec);
+
+    const result = await registry.stopAll('t1', 'superseded');
+    expect(result).toEqual({ stopped: 1, failed: 0 });
+  });
+
+  it('stopAll still completes when completionPromise rejects', async () => {
+    const registry = createThreadExecutionRegistry();
+    const completionPromise = Promise.reject(new Error('completion failed'));
+    const exec = baseExecution({ executionId: 'e1', threadTs: 't1', completionPromise });
+    registry.register(exec);
+
+    const result = await registry.stopAll('t1', 'superseded');
+    expect(result).toEqual({ stopped: 1, failed: 0 });
   });
 
   it('restores executions whose stop threw so a later stopAll can retry', async () => {
