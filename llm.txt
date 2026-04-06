@@ -1,0 +1,114 @@
+# slack-cc-bot
+
+> Run the Anthropic Claude Agent SDK as a Slack bot with per-repo workspace routing.
+
+## What this project does
+
+slack-cc-bot connects the Claude Agent SDK to a Slack workspace via Socket Mode.
+When a user @mentions the bot in a channel or thread, the bot:
+
+1. Resolves which local code repository the conversation is about
+2. Loads the full thread history (text and images) as context
+3. Runs the Claude agent with the repo as its working directory
+4. Streams progress updates into Slack, then posts a rich-text reply
+5. Persists the session and memories to SQLite for multi-turn continuity
+
+The bot acts as a coding assistant that is aware of your repositories and
+remembers context across conversations.
+
+## Key concepts
+
+### Agent providers
+The bot uses a pluggable provider system. The default (and currently only)
+provider wraps the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`).
+Providers live in `src/agent/providers/`. Each provider implements an adapter
+that converts Slack messages into agent calls and agent responses back into
+Slack messages.
+
+### Workspace routing
+Each Slack thread binds to a specific repository/directory. The bot auto-detects
+the target repo from the message text, or the user can manually choose one via a
+Slack Message Action. All repos must live under the path set in `REPO_ROOT_DIR`.
+
+### Memory model (3 layers)
+- **Preferences** — persistent user instructions (e.g. "always respond in English")
+- **Global memories** — facts that apply across all workspaces
+- **Workspace memories** — repo-specific context (e.g. "this project uses pnpm")
+
+Memories are stored in SQLite and injected into future turns automatically.
+
+### MCP server
+A custom MCP server (`slack-ui`) runs inside the agent and exposes three tools:
+- `publish_state` — update the Slack thread's status/progress indicator
+- `save_memory` — persist a memory to one of the three layers
+- `recall_memory` — retrieve stored memories for context
+
+### Slash commands
+`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider` —
+all respond ephemerally. Commands are auto-synced to the Slack App manifest
+on startup when `SLACK_APP_ID` is configured.
+
+### Stop controls
+Users can cancel an in-progress reply by reacting with :octagonal_sign: (🛑)
+on any message in the thread, or by using the "Stop Reply" message shortcut.
+
+## Project layout
+
+```
+src/
+  index.ts                  — entry point, graceful shutdown
+  application.ts            — composition root, wires all subsystems
+  agent/providers/          — pluggable AI provider adapters
+    claude-code/
+      adapter.ts            — Claude Agent SDK provider implementation
+      mcp-server.ts         — custom Slack UI MCP tools
+      prompts.ts            — system prompt assembly
+      messages.ts           — Slack ↔ Agent message conversion
+      prompt-pipeline/      — prompt processing pipeline
+      tools/                — MCP tool definitions
+  slack/
+    app.ts                  — Bolt app init + handler registration
+    commands/               — slash command handlers
+    ingress/                — @mention / thread / assistant handlers
+    interactions/           — message action + modal handlers
+    context/                — thread history loading
+    render/                 — streaming output + rich text
+  db/                       — SQLite schema (Drizzle ORM)
+  session/                  — session persistence
+  memory/                   — cross-thread memory store
+  workspace/                — repo discovery + resolution
+```
+
+## Tech stack
+
+- **Runtime**: Node.js ≥ 22, TypeScript (strict, ESM-only)
+- **Slack**: @slack/bolt 4.x, Socket Mode
+- **AI**: @anthropic-ai/claude-agent-sdk, @anthropic-ai/sdk
+- **Database**: better-sqlite3 + drizzle-orm
+- **Validation**: Zod for all external inputs
+- **Build**: tsdown
+- **Test**: Vitest (unit), custom live E2E framework against real Slack
+
+## Getting started
+
+```bash
+git clone https://github.com/Innei/slack-cc-bot.git
+cd slack-cc-bot
+pnpm install
+cp .env.example .env   # fill in required values
+pnpm dev               # development with hot reload
+```
+
+Required environment variables:
+- `SLACK_BOT_TOKEN` — Bot User OAuth Token (xoxb-...)
+- `SLACK_APP_TOKEN` — App-Level Token for Socket Mode (xapp-...)
+- `SLACK_SIGNING_SECRET` — from Slack App settings
+- `REPO_ROOT_DIR` — absolute path to the directory containing your repos
+
+## Useful commands
+
+- `pnpm dev` — development server with hot reload
+- `pnpm build` — compile TypeScript
+- `pnpm test` — run unit tests
+- `pnpm typecheck` — type-check without emitting
+- `pnpm e2e` — run live E2E tests against a real Slack workspace
