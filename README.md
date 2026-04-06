@@ -108,7 +108,8 @@ Create a new Slack app at <https://api.slack.com/apps> → **From a manifest**, 
         "im:history",
         "reactions:read",
         "reactions:write",
-        "users:read"
+        "users:read",
+        "users:write"
       ]
     },
     "pkce_enabled": false

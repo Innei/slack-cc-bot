@@ -13,6 +13,7 @@ import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
+import { PresenceKeeper } from '~/slack/presence-keeper.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
@@ -54,6 +55,11 @@ export function createApplication(): RuntimeApplication {
     ...(statusProbe ? { statusProbe } : {}),
   });
 
+  const presenceKeeper = new PresenceKeeper({
+    client: slackApp.client,
+    logger: logger.withTag('presence'),
+  });
+
   return {
     logger,
     async start() {
@@ -71,9 +77,11 @@ export function createApplication(): RuntimeApplication {
         });
       }
       await slackApp.start();
+      await presenceKeeper.start();
       logger.info('Slack Socket Mode application started.');
     },
     async stop() {
+      await presenceKeeper.stop();
       await slackApp.stop();
       await providerRegistry.drain();
       sqlite.close();
