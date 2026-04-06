@@ -13,19 +13,21 @@ WORKDIR /app
 FROM base AS build
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/bot/package.json ./apps/bot/package.json
 COPY packages/live-cli/package.json ./packages/live-cli/package.json
 
 RUN pnpm install --frozen-lockfile
 
 COPY . .
 
-RUN pnpm build
+RUN pnpm --filter @slack-cc-bot/bot build
 
 FROM base AS prod-deps
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/bot/package.json ./apps/bot/package.json
 
-RUN pnpm install --prod --frozen-lockfile
+RUN pnpm install --prod --frozen-lockfile --filter @slack-cc-bot/bot
 
 FROM base AS runtime
 
@@ -37,12 +39,12 @@ RUN apt-get update \
   && groupadd --system app \
   && useradd --system --gid app --create-home app
 
-COPY --from=build --chown=app:app /app/package.json ./package.json
+COPY --from=build --chown=app:app /app/apps/bot/package.json ./package.json
 COPY --from=prod-deps --chown=app:app /app/node_modules ./node_modules
-COPY --from=build --chown=app:app /app/dist ./dist
+COPY --from=build --chown=app:app /app/apps/bot/dist ./dist
 
 RUN mkdir -p /app/data && chown -R app:app /app/data /pnpm && chmod 0777 /app/data
 
 USER app
 
-CMD ["pnpm", "start"]
+CMD ["node", "dist/index.js"]

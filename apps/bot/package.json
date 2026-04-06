@@ -1,0 +1,43 @@
+{
+  "name": "@slack-cc-bot/bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
+  "type": "module",
+  "scripts": {
+    "build": "tsdown",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "dev": "nodemon",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "0.2.92",
+    "@anthropic-ai/sdk": "0.82.0",
+    "@innei/pretty-logger-core": "0.4.2",
+    "@slack/bolt": "4.6.0",
+    "@t3-oss/env-core": "0.13.11",
+    "better-sqlite3": "^12.8.0",
+    "dotenv": "17.4.0",
+    "drizzle-orm": "^0.45.2",
+    "markdown-to-slack-blocks": "1.5.0",
+    "zod": "4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "25.5.2",
+    "drizzle-kit": "^0.31.10",
+    "nodemon": "3.1.14",
+    "tsdown": "0.21.7",
+    "tsx": "4.21.0",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.2"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

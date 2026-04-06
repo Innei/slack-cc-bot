@@ -64,5 +64,5 @@ function looksBinary(bytes: Uint8Array): boolean {
 }
 
 function stripLeadingBom(text: string): string {
-  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }

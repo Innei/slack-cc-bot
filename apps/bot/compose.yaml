@@ -1,8 +1,8 @@
 services:
   slack-cc-bot:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ../..
+      dockerfile: apps/bot/Dockerfile
     env_file:
       - .env
     environment:

@@ -1,5 +1,5 @@
 import { encodeWorkspacePickerButtonValue } from '../interactions/workspace-picker-payload.js';
-import type { SlackBlock,SlackWebClientLike  } from '../types.js';
+import type { SlackBlock, SlackWebClientLike } from '../types.js';
 import type { SlackIngressDependencies } from './app-mention-handler.js';
 import { handleThreadConversation, WORKSPACE_PICKER_ACTION_ID } from './app-mention-handler.js';
 

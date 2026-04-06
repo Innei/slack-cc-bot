@@ -1,4 +1,4 @@
-import type { z,ZodError, ZodSchema } from 'zod';
+import type { z, ZodError, ZodSchema } from 'zod';
 
 export class SchemaParseError extends Error {
   constructor(

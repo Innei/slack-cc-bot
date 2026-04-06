@@ -15,7 +15,7 @@ function resolveLiveDir(): string {
   const rootDir = process.env.LIVE_E2E_DIR;
   if (rootDir) return path.resolve(rootDir);
 
-  return path.resolve(process.cwd(), 'src/e2e/live');
+  return path.resolve(process.cwd(), 'apps/bot/src/e2e/live');
 }
 
 async function actionList(opts: { search?: string }): Promise<void> {
