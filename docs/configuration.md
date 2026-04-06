@@ -49,7 +49,7 @@ Create a new Slack app at <https://api.slack.com/apps> -> **From a manifest**, t
     },
     "bot_user": {
       "display_name": "cc-001",
-      "always_online": false
+      "always_online": true
     }
   },
   "oauth_config": {

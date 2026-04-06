@@ -126,6 +126,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'test' },
               { command: '/workspace', description: 'test' },
@@ -188,6 +189,7 @@ describe('syncSlashCommands with token rotation', () => {
         slackOk({
           manifest: {
             features: {
+              bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
                 { command: '/usage', description: 'test' },
                 { command: '/workspace', description: 'test' },
@@ -260,6 +262,7 @@ describe('syncSlashCommands with token rotation', () => {
         slackOk({
           manifest: {
             features: {
+              bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
                 { command: '/usage', description: 'test' },
                 { command: '/workspace', description: 'test' },
@@ -343,9 +346,10 @@ describe('syncSlashCommands with token rotation', () => {
     const shortcuts = body.manifest.features.shortcuts;
     expect(shortcuts).toHaveLength(1);
     expect(shortcuts[0].callback_id).toBe('stop_reply_action');
+    expect(body.manifest.features.bot_user.always_online).toBe(true);
   });
 
-  it('skips update when all commands exist', async () => {
+  it('skips update when all commands exist and always_online is true', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-noop-'));
     const tokenStorePath = path.join(tmpDir, 'tokens.json');
 
@@ -353,6 +357,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'x' },
               { command: '/workspace', description: 'x' },
@@ -383,6 +388,58 @@ describe('syncSlashCommands with token rotation', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('enables always_online when bot_user has it disabled', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-presence-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              bot_user: { display_name: 'cc-001', always_online: false },
+              slash_commands: [
+                { command: '/usage', description: 'x' },
+                { command: '/workspace', description: 'x' },
+                { command: '/memory', description: 'x' },
+                { command: '/session', description: 'x' },
+                { command: '/provider', description: 'x' },
+                { command: '/version', description: 'x' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'x',
+                },
+              ],
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(slackOk({}));
+
+    const logger = createTestLogger();
+    await syncSlashCommands({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-token',
+      logger,
+      tokenStorePath,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    const updateCall = fetchMock.mock.calls[1];
+    expect(updateCall).toBeDefined();
+    const [, updateInit] = updateCall as [string, RequestInit];
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.manifest.features.bot_user.always_online).toBe(true);
+    expect(body.manifest.features.bot_user.display_name).toBe('cc-001');
+
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('always_online'));
   });
 
   it('logs error when no tokens available', async () => {

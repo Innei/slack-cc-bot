@@ -18,9 +18,16 @@ interface SlackManifestShortcut {
   type: 'global' | 'message';
 }
 
+interface SlackManifestBotUser {
+  [key: string]: unknown;
+  always_online?: boolean;
+  display_name?: string;
+}
+
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
+    bot_user?: SlackManifestBotUser;
     shortcuts?: SlackManifestShortcut[];
     slash_commands?: SlackManifestSlashCommand[];
     [key: string]: unknown;
@@ -127,6 +134,10 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const existingCallbackIds = new Set(existingShortcuts.map((s) => s.callback_id));
   const missingShortcuts = DESIRED_SHORTCUTS.filter((s) => !existingCallbackIds.has(s.callback_id));
 
+  // Ensure bot_user.always_online is true (required for Socket Mode presence)
+  const botUser = currentManifest.features?.bot_user;
+  const needsAlwaysOnline = !botUser?.always_online;
+
   // Remove /stop if still present in manifest (replaced by reaction + shortcut)
   const commandsToKeep = (
     missingCommands.length > 0 ? [...existingCommands, ...missingCommands] : existingCommands
@@ -134,9 +145,9 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const commandsChanged =
     missingCommands.length > 0 || commandsToKeep.length !== existingCommands.length;
 
-  if (!commandsChanged && missingShortcuts.length === 0) {
+  if (!commandsChanged && missingShortcuts.length === 0 && !needsAlwaysOnline) {
     logger.info(
-      'All %d slash commands and %d shortcuts already registered',
+      'All %d slash commands and %d shortcuts already registered, bot always_online is enabled',
       DESIRED_COMMANDS.length,
       DESIRED_SHORTCUTS.length,
     );
@@ -157,11 +168,18 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
       missingShortcuts.map((s) => s.name).join(', '),
     );
   }
+  if (needsAlwaysOnline) {
+    logger.info('Enabling bot_user.always_online for Socket Mode presence');
+  }
 
   const updatedManifest: SlackManifest = {
     ...currentManifest,
     features: {
       ...currentManifest.features,
+      bot_user: {
+        ...currentManifest.features?.bot_user,
+        always_online: true,
+      },
       slash_commands: commandsToKeep,
       shortcuts: [...existingShortcuts, ...missingShortcuts],
     },
