@@ -40,13 +40,13 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
           blocks: [
             {
               type: 'header',
-              text: { type: 'plain_text', text: 'Claude Code Bot', emoji: true },
+              text: { type: 'plain_text', text: 'AI Assistant', emoji: true },
             },
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: "I'm an AI coding assistant powered by Claude. Mention me in a channel, or start a chat from the *Chat* tab.",
+                text: 'Your AI coding assistant in Slack. Mention me in a channel, or start a chat from the *Chat* tab.',
               },
             },
             { type: 'divider' },
