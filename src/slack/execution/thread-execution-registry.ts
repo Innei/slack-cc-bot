@@ -1,7 +1,8 @@
-export type ThreadExecutionStopReason = 'user_stop';
+export type ThreadExecutionStopReason = 'superseded' | 'user_stop';
 
 export interface RegisteredThreadExecution {
   channelId: string;
+  completionPromise?: Promise<void>;
   executionId: string;
   providerId: string;
   startedAt: string;
@@ -152,6 +153,14 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
           failed += 1;
           failedExecutions.push(execution);
         }
+      }
+
+      // Wait for stopped executions to fully complete (flush lifecycle events, persist session)
+      const completionPromises = executions
+        .filter((e) => e.completionPromise && !failedExecutions.includes(e))
+        .map((e) => e.completionPromise!.catch(() => {}));
+      if (completionPromises.length > 0) {
+        await Promise.allSettled(completionPromises);
       }
 
       if (failedExecutions.length > 0) {

@@ -5,6 +5,7 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import type { SessionRecord } from '~/session/types.js';
 
+import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
 import { createActivitySink } from './activity-sink.js';
 import { resolveAndPersistSession } from './session-manager.js';
@@ -79,6 +80,34 @@ export async function acknowledgeAndLog(
   if (options.addAcknowledgementReaction) {
     await deps.renderer.addAcknowledgementReaction(ctx.client, message.channel, message.ts);
   }
+
+  return CONTINUE;
+}
+
+export async function stopActiveExecutionsStep(
+  ctx: ConversationPipelineContext,
+): Promise<PipelineStepResult> {
+  const { deps, threadTs } = ctx;
+  const active = deps.threadExecutionRegistry.listActive(threadTs);
+  if (active.length === 0) return CONTINUE;
+
+  runtimeInfo(
+    deps.logger,
+    'Stopping %d active execution(s) in thread %s before processing new message',
+    active.length,
+    threadTs,
+  );
+  const result = await deps.threadExecutionRegistry.stopAll(threadTs, 'superseded');
+  runtimeInfo(
+    deps.logger,
+    'Stopped %d execution(s) in thread %s (failed=%d)',
+    result.stopped,
+    threadTs,
+    result.failed,
+  );
+
+  // Refresh session from store — the stopped execution may have persisted a new claudeSessionId
+  ctx.existingSession = deps.sessionStore.get(threadTs);
 
   return CONTINUE;
 }
@@ -207,6 +236,10 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   const executionId = randomUUID();
   const startedAt = new Date().toISOString();
   let executionReleasedFromRegistry = false;
+  let resolveExecutionDone: () => void;
+  const executionDone = new Promise<void>((resolve) => {
+    resolveExecutionDone = resolve;
+  });
   const releaseExecutionFromRegistry = () => {
     if (executionReleasedFromRegistry) {
       return;
@@ -217,12 +250,13 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
 
   const unregisterExecution = deps.threadExecutionRegistry.register({
     channelId: message.channel,
+    completionPromise: executionDone,
     executionId,
     providerId: executor.providerId,
     startedAt,
-    stop: async () => {
+    stop: async (reason?: ThreadExecutionStopReason) => {
       releaseExecutionFromRegistry();
-      controller.abort();
+      controller.abort(reason ?? 'user_stop');
     },
     threadTs,
     userId: message.user,
@@ -282,6 +316,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
           deps.logger.warn('Failed to add completion reaction: %s', String(error));
         });
     }
+    resolveExecutionDone!();
   }
 
   return CONTINUE;
@@ -299,6 +334,7 @@ function resolveExecutor(
 
 export const DEFAULT_CONVERSATION_STEPS: PipelineStep[] = [
   acknowledgeAndLog,
+  stopActiveExecutionsStep,
   resolveWorkspaceStep,
   resolveSessionStep,
   prepareThreadContext,

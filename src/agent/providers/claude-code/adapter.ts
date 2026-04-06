@@ -210,8 +210,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       });
     } catch (error) {
       if (isAbortError(error)) {
+        const stopReason =
+          request.abortSignal?.reason === 'superseded' ? 'superseded' : 'user_stop';
         this.logger.info(
-          'Claude Agent SDK execution stopped (user abort, thread %s)',
+          'Claude Agent SDK execution stopped (reason=%s, thread %s)',
+          stopReason,
           request.threadTs,
         );
         await disposeAsyncIterator(iterator);
@@ -219,7 +222,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           await sink.onEvent({
             type: 'lifecycle',
             phase: 'stopped',
-            reason: 'user_stop',
+            reason: stopReason,
             ...(sessionId ? { resumeHandle: sessionId } : {}),
           });
         } catch (publishError) {

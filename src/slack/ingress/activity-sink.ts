@@ -223,7 +223,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
     if (event.phase === 'stopped') {
       terminalPhase = 'stopped';
-      if (!progressMessageTs) {
+      if (event.reason !== 'superseded' && !progressMessageTs) {
         await renderer.postThreadReply(client, channel, threadTs, '_Stopped by user._');
       }
       return;

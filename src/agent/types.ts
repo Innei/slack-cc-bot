@@ -37,7 +37,7 @@ export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
       phase: 'stopped';
-      reason: 'user_stop';
+      reason: 'superseded' | 'user_stop';
       resumeHandle?: string;
     }
   | {
