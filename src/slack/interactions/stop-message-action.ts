@@ -35,7 +35,12 @@ export function createStopMessageActionHandler(deps: StopMessageActionDependenci
         ? `Stopped ${result.stopped} in-progress ${result.stopped === 1 ? 'reply' : 'replies'}.`
         : 'No in-progress reply found in this thread.';
 
-    await (client as SlackWebClientLike).chat.postEphemeral({
+    const chat = (client as SlackWebClientLike).chat;
+    if (!chat.postEphemeral) {
+      throw new Error('Slack chat.postEphemeral is not available on the configured client');
+    }
+
+    await chat.postEphemeral({
       channel: channelId,
       user: parsed.user.id,
       thread_ts: threadTs,

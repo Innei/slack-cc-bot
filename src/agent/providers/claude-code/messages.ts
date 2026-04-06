@@ -1,7 +1,10 @@
+import path from 'node:path';
+
 import type {
   SDKAPIRetryMessage,
   SDKAssistantMessage,
   SDKAuthStatusMessage,
+  SDKFilesPersistedEvent,
   SDKHookProgressMessage,
   SDKMessage,
   SDKPartialAssistantMessage,
@@ -15,6 +18,7 @@ import type {
   SDKToolProgressMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
+import type { GeneratedImageFile } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 
@@ -142,10 +146,44 @@ async function handleSystemMessage(
       return;
     }
 
+    case 'files_persisted': {
+      await handleFilesPersistedMessage(message as SDKFilesPersistedEvent, sink, handlers);
+      return;
+    }
+
     default: {
       logger.info('Unhandled Claude system message subtype: %s', message.subtype);
     }
   }
+}
+
+const PERSISTED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
+
+function isPersistedImageFilename(filename: string): boolean {
+  return PERSISTED_IMAGE_FILENAME.test(path.basename(filename));
+}
+
+async function handleFilesPersistedMessage(
+  message: SDKFilesPersistedEvent,
+  sink: AgentExecutionSink,
+  handlers: MessageHandlers,
+): Promise<void> {
+  const baseDir = handlers.getSessionCwd() ?? process.cwd();
+  const files: GeneratedImageFile[] = [];
+  for (const entry of message.files) {
+    if (!isPersistedImageFilename(entry.filename)) {
+      continue;
+    }
+    files.push({
+      fileName: entry.filename,
+      path: path.resolve(baseDir, entry.filename),
+      providerFileId: entry.file_id,
+    });
+  }
+  if (files.length === 0) {
+    return;
+  }
+  await sink.onEvent({ type: 'generated-images', files });
 }
 
 function handleSystemInit(
@@ -154,6 +192,7 @@ function handleSystemInit(
   handlers: MessageHandlers,
 ): void {
   handlers.setSessionId(message.session_id);
+  handlers.setSessionCwd(message.cwd);
   logger.info(
     'Claude Code session init: id=%s model=%s cwd=%s',
     message.session_id,

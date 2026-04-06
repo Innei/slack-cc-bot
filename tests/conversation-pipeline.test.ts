@@ -5,6 +5,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
+import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import {
   acknowledgeAndLog,
   DEFAULT_CONVERSATION_STEPS,
@@ -94,13 +95,7 @@ describe('DEFAULT_CONVERSATION_STEPS', () => {
 function createMinimalPipelineContext(overrides?: {
   addAcknowledgementReaction?: boolean;
   sessionStoreRecords?: SessionRecord[];
-  threadExecutionRegistry?: {
-    listActive: ReturnType<typeof vi.fn>;
-    register: ReturnType<typeof vi.fn>;
-    stopAll: ReturnType<typeof vi.fn>;
-    stopByMessage?: ReturnType<typeof vi.fn>;
-    trackMessage?: ReturnType<typeof vi.fn>;
-  };
+  threadExecutionRegistry?: ThreadExecutionRegistry;
   workspaceResolverResult?: WorkspaceResolution;
 }): ConversationPipelineContext {
   const records = new Map(
@@ -155,6 +150,7 @@ function createMinimalPipelineContext(overrides?: {
         update: vi.fn().mockResolvedValue({}),
       },
       conversations: { replies: vi.fn().mockResolvedValue({ messages: [] }) },
+      files: { uploadV2: vi.fn().mockResolvedValue({ files: [{ id: 'F1' }] }) },
       reactions: { add: vi.fn().mockResolvedValue({}) },
       views: { open: vi.fn().mockResolvedValue({}) },
     } as unknown as SlackWebClientLike,
@@ -173,6 +169,7 @@ function createMinimalPipelineContext(overrides?: {
         clearUiState: vi.fn().mockResolvedValue(undefined),
         deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
         finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+        postGeneratedImages: vi.fn().mockResolvedValue([]),
         postThreadReply: vi.fn().mockResolvedValue(undefined),
         setUiState: vi.fn().mockResolvedValue(undefined),
         showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
@@ -332,7 +329,7 @@ describe('executeAgent step', () => {
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
-      },
+      } as unknown as ThreadExecutionRegistry,
     });
     await prepareThreadContext(ctx);
 
@@ -349,7 +346,11 @@ describe('executeAgent step', () => {
         userId: 'U123',
       }),
     );
-    const registered = register.mock.calls[0][0] as { stop: () => Promise<void> };
+    const firstRegisterCall = register.mock.calls[0];
+    if (!firstRegisterCall) {
+      throw new Error('Expected register() to be called once');
+    }
+    const registered = firstRegisterCall[0] as { stop: () => Promise<void> };
     expect(typeof registered.stop).toBe('function');
 
     expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledWith(
@@ -370,7 +371,7 @@ describe('executeAgent step', () => {
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
-      },
+      } as unknown as ThreadExecutionRegistry,
     });
     await prepareThreadContext(ctx);
 
@@ -393,7 +394,7 @@ describe('executeAgent step', () => {
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
-      },
+      } as unknown as ThreadExecutionRegistry,
     });
     await prepareThreadContext(ctx);
 
@@ -416,7 +417,7 @@ describe('executeAgent step', () => {
         listActive: vi.fn(),
         register,
         stopAll: vi.fn(),
-      },
+      } as unknown as ThreadExecutionRegistry,
     });
     await prepareThreadContext(ctx);
     vi.mocked(ctx.deps.claudeExecutor.execute).mockRejectedValueOnce(new Error('exec failed'));

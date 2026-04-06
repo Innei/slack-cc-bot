@@ -355,7 +355,7 @@ describe('Slack loading status test', () => {
     });
     await vi.waitFor(() => {
       expect(
-        (logger.info as ReturnType<typeof vi.fn>).mock.calls.some((call: unknown[]) =>
+        (logger.info as unknown as ReturnType<typeof vi.fn>).mock.calls.some((call: unknown[]) =>
           String(call[0]).includes('First Claude SDK message'),
         ),
       ).toBe(true);
@@ -421,7 +421,9 @@ describe('Slack loading status test', () => {
     expect(lifecycle.some((e) => e.phase === 'failed')).toBe(false);
     expect(stoppedPublishAttempts).toBe(1);
     expect(logger.warn).toHaveBeenCalled();
-    const warnMsg = String((logger.warn as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '');
+    const warnMsg = String(
+      (logger.warn as unknown as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '',
+    );
     expect(warnMsg).toContain('Failed to publish stopped lifecycle');
   });
 
@@ -755,6 +757,8 @@ function createExecutionRequest(
       messages: [],
       renderedPrompt: '',
       threadTs: '1712345678.000100',
+      loadedImages: [],
+      imageLoadFailures: [],
     },
     threadTs: '1712345678.000100',
     userId: 'U123',
@@ -901,6 +905,9 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         reactionCalls.push(args);
         return {};
       },
+    },
+    files: {
+      uploadV2: async () => ({ files: [{ id: 'F1' }] }),
     },
     views: {
       open: async () => ({}),

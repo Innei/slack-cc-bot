@@ -350,6 +350,9 @@ function createSlackClientFixture(): {
     reactions: {
       add: async () => ({}),
     },
+    files: {
+      uploadV2: async () => ({ files: [{ id: 'F1' }] }),
+    },
     views: {
       open: async (args) => {
         viewOpenCalls.push(args);

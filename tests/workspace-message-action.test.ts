@@ -44,10 +44,22 @@ const sdkMocks = vi.hoisted(() => ({
   ),
 }));
 
+const anthropicMocks = vi.hoisted(() => ({
+  create: vi.fn().mockResolvedValue({
+    content: [{ type: 'text', text: '[]' }],
+  }),
+}));
+
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   createSdkMcpServer: sdkMocks.createSdkMcpServer,
   query: sdkMocks.query,
   tool: sdkMocks.tool,
+}));
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    messages = { create: anthropicMocks.create };
+  },
 }));
 
 describe('Workspace message action test', () => {
@@ -55,6 +67,10 @@ describe('Workspace message action test', () => {
     sdkMocks.createSdkMcpServer.mockClear();
     sdkMocks.query.mockReset();
     sdkMocks.tool.mockClear();
+    anthropicMocks.create.mockClear();
+    anthropicMocks.create.mockResolvedValue({
+      content: [{ type: 'text', text: '[]' }],
+    });
   });
 
   it('opens a modal and starts a new workspace-bound session from message action selection', async () => {
@@ -376,6 +392,9 @@ function createSlackClientFixture(): {
     },
     reactions: {
       add: async () => ({}),
+    },
+    files: {
+      uploadV2: async () => ({ files: [{ id: 'F1' }] }),
     },
     views: {
       open: async (args) => {

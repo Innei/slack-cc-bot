@@ -1,6 +1,12 @@
 import type { ContextMemories } from '~/memory/types.js';
 import type { NormalizedThreadContext } from '~/slack/context/thread-context-loader.js';
 
+export interface GeneratedImageFile {
+  fileName: string;
+  path: string;
+  providerFileId: string;
+}
+
 export interface AgentExecutionRequest {
   abortSignal?: AbortSignal;
   channelId: string;
@@ -53,6 +59,10 @@ export type AgentExecutionEvent =
       status: 'pending' | 'in_progress' | 'complete' | 'error';
       details?: string;
       output?: string;
+    }
+  | {
+      type: 'generated-images';
+      files: GeneratedImageFile[];
     };
 
 export interface AgentActivityState {

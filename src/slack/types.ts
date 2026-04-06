@@ -67,10 +67,42 @@ export interface SlackActionsBlock {
   type: 'actions';
 }
 
-export type SlackBlock = SlackActionsBlock | SlackContextBlock | SlackSectionBlock;
+export interface SlackImageBlock {
+  alt_text?: string;
+  slack_file: { id: string };
+  type: 'image';
+}
+
+export type SlackBlock =
+  | SlackActionsBlock
+  | SlackContextBlock
+  | SlackImageBlock
+  | SlackSectionBlock;
+
+export interface SlackFilesUploadV2Response {
+  file?: { id?: string };
+  files?: Array<{ id?: string }>;
+}
+
+export interface SlackFilesApi {
+  uploadV2: (args: {
+    alt_text?: string;
+    channel_id: string;
+    file: Buffer;
+    filename: string;
+    thread_ts: string;
+    title?: string;
+  }) => Promise<SlackFilesUploadV2Response>;
+}
 
 export interface SlackChatApi {
   delete: (args: { channel: string; ts: string }) => Promise<unknown>;
+  postEphemeral?: (args: {
+    channel: string;
+    text: string;
+    thread_ts?: string;
+    user: string;
+  }) => Promise<unknown>;
   postMessage: (args: {
     blocks?: unknown[];
     channel: string;
@@ -94,6 +126,7 @@ export interface SlackWebClientLike {
   auth?: SlackAuthApi;
   chat: SlackChatApi;
   conversations: SlackConversationsApi;
+  files: SlackFilesApi;
   reactions: SlackReactionsApi;
   views: SlackViewsApi;
 }

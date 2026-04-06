@@ -31,19 +31,43 @@ export interface SlackPostedMessageResponse {
   ts: string;
 }
 
+/** File metadata returned on messages (e.g. shared uploads, image attachments). */
+export interface SlackMessageFile {
+  filetype?: string;
+  id?: string;
+  mimetype?: string;
+  name?: string;
+  pretty_type?: string;
+  url_private?: string;
+}
+
 export interface SlackConversationRepliesResponse {
   has_more?: boolean;
   messages?: Array<{
     blocks?: Array<{
       block_id?: string;
       elements?: Array<Record<string, unknown>>;
+      slack_file?: { id?: string };
       type?: string;
     }>;
     bot_id?: string;
+    files?: SlackMessageFile[];
     text?: string;
     thread_ts?: string;
     ts?: string;
     user?: string;
+  }>;
+}
+
+export interface SlackGetUploadUrlExternalResponse {
+  file_id: string;
+  upload_url: string;
+}
+
+export interface SlackCompleteUploadExternalResponse {
+  files?: Array<{
+    id?: string;
+    title?: string;
   }>;
 }
 
@@ -79,6 +103,47 @@ export class SlackApiClient {
     ts: string;
   }): Promise<SlackConversationRepliesResponse> {
     return this.call<SlackConversationRepliesResponse>('conversations.replies', args, 'GET');
+  }
+
+  /**
+   * Upload a file into a channel thread using Slack's external upload flow
+   * (`files.getUploadURLExternal` → POST bytes → `files.completeUploadExternal`).
+   * Intended for the E2E trigger user token so the bot sees a real thread attachment.
+   */
+  async uploadFileToThread(args: {
+    alt_text?: string;
+    channel_id: string;
+    data: Uint8Array;
+    filename: string;
+    thread_ts: string;
+    title?: string;
+  }): Promise<SlackCompleteUploadExternalResponse> {
+    const { channel_id, data, filename, thread_ts } = args;
+    const title = args.title ?? filename;
+
+    const uploadTicket = await this.call<SlackGetUploadUrlExternalResponse>(
+      'files.getUploadURLExternal',
+      {
+        alt_txt: args.alt_text,
+        filename,
+        length: data.byteLength,
+      },
+      'POST',
+    );
+
+    await this.postBytesToSlackUploadStorage(uploadTicket.upload_url, data);
+
+    const filesJson = JSON.stringify([{ id: uploadTicket.file_id, title }]);
+
+    return this.call<SlackCompleteUploadExternalResponse>(
+      'files.completeUploadExternal',
+      {
+        channel_id,
+        files: filesJson,
+        thread_ts,
+      },
+      'POST',
+    );
   }
 
   private async call<T extends object>(
@@ -140,6 +205,23 @@ export class SlackApiClient {
     }
 
     throw lastError instanceof Error ? lastError : new Error(String(lastError));
+  }
+
+  private async postBytesToSlackUploadStorage(uploadUrl: string, data: Uint8Array): Promise<void> {
+    const response = await this.fetchWithRetry(uploadUrl, {
+      body: Buffer.from(data),
+      headers: {
+        'Content-Type': 'application/octet-stream',
+      },
+      method: 'POST',
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => '');
+      throw new Error(
+        `Slack file storage upload failed with HTTP ${response.status}${detail ? `: ${detail}` : ''}`,
+      );
+    }
   }
 }
 

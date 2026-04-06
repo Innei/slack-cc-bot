@@ -27,6 +27,7 @@ function createRendererStub(): SlackRenderer {
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    postGeneratedImages: vi.fn().mockResolvedValue([]),
     finalizeThreadProgressMessageStopped: vi.fn().mockResolvedValue(undefined),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
@@ -45,6 +46,7 @@ function createMockClient(): SlackWebClientLike {
       update: vi.fn().mockResolvedValue({}),
     },
     conversations: { replies: vi.fn().mockResolvedValue({ messages: [] }) },
+    files: { uploadV2: vi.fn().mockResolvedValue({ files: [{ id: 'F1' }] }) },
     reactions: { add: vi.fn().mockResolvedValue({}) },
     views: { open: vi.fn().mockResolvedValue({}) },
   } as unknown as SlackWebClientLike;
@@ -171,6 +173,188 @@ describe('createActivitySink', () => {
     await sink.onEvent({ type: 'activity-state', state });
 
     expect(sink.toolHistory.get('Reading')).toBe(2);
+  });
+  it('buffers generated-images and flushes via postGeneratedImages after assistant text reply', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const postThreadReply = vi.mocked(renderer.postThreadReply);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    const files = [
+      { fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' },
+      { fileName: 'b.png', path: '/tmp/b.png', providerFileId: 'p2' },
+    ];
+    await sink.onEvent({ type: 'generated-images', files });
+    await sink.onEvent({ type: 'assistant-message', text: 'Here you go.' });
+
+    expect(postThreadReply.mock.invocationCallOrder[0]).toBeLessThan(
+      postGeneratedImages.mock.invocationCallOrder[0]!,
+    );
+    expect(postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Here you go.',
+      expect.any(Object),
+    );
+    expect(postGeneratedImages).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1', files);
+  });
+
+  it('posts assistant text when postGeneratedImages reports failures without dropping the reply', async () => {
+    const renderer = createRendererStub();
+    const failedFile = { fileName: 'a.png', path: '/x/a.png', providerFileId: 'p1' };
+    vi.mocked(renderer.postGeneratedImages).mockResolvedValue([failedFile]);
+    const postThreadReply = vi.mocked(renderer.postThreadReply);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'generated-images',
+      files: [failedFile],
+    });
+    await sink.onEvent({ type: 'assistant-message', text: 'Reply text.' });
+
+    expect(postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Reply text.',
+      expect.any(Object),
+    );
+    expect(renderer.postGeneratedImages).toHaveBeenCalled();
+  });
+
+  it('retries postGeneratedImages on finalize after assistant-time flush leaves failures, when lifecycle completed', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const files = [{ fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' }];
+    postGeneratedImages.mockResolvedValueOnce(files).mockResolvedValueOnce([]);
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'generated-images', files });
+    await sink.onEvent({ type: 'assistant-message', text: 'Here is the answer.' });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(postGeneratedImages).toHaveBeenCalledTimes(2);
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(1, expect.anything(), 'C123', 'ts1', files);
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(2, expect.anything(), 'C123', 'ts1', files);
+  });
+
+  it('retries only failed images on finalize after partial assistant-time failure', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const a = { fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' };
+    const b = { fileName: 'b.png', path: '/tmp/b.png', providerFileId: 'p2' };
+    postGeneratedImages.mockResolvedValueOnce([b]).mockResolvedValueOnce([]);
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'generated-images', files: [a, b] });
+    await sink.onEvent({ type: 'assistant-message', text: 'Done.' });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(1, expect.anything(), 'C123', 'ts1', [
+      a,
+      b,
+    ]);
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(2, expect.anything(), 'C123', 'ts1', [b]);
+  });
+
+  it('flushes buffered images on finalize when lifecycle completed', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    const files = [{ fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' }];
+    await sink.onEvent({ type: 'generated-images', files });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(postGeneratedImages).toHaveBeenCalledWith(expect.anything(), 'C123', 'ts1', files);
+  });
+
+  it('preserves buffer when finalize-time postGeneratedImages returns failures; second finalize retries', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const files = [{ fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' }];
+    postGeneratedImages.mockResolvedValueOnce(files).mockResolvedValueOnce([]);
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({ type: 'generated-images', files });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+    await sink.finalize();
+
+    expect(postGeneratedImages).toHaveBeenCalledTimes(2);
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(1, expect.anything(), 'C123', 'ts1', files);
+    expect(postGeneratedImages).toHaveBeenNthCalledWith(2, expect.anything(), 'C123', 'ts1', files);
+  });
+
+  it('does not flush images on finalize after lifecycle failed', async () => {
+    const renderer = createRendererStub();
+    const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'generated-images',
+      files: [{ fileName: 'a.png', path: '/tmp/a.png', providerFileId: 'p1' }],
+    });
+    await sink.onEvent({ type: 'lifecycle', phase: 'failed', error: 'boom' });
+    await sink.finalize();
+
+    expect(postGeneratedImages).not.toHaveBeenCalled();
   });
 
   it('lifecycle stopped with no progress posts _Stopped by user._ and not the generic error', async () => {

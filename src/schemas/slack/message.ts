@@ -21,6 +21,17 @@ const SlackGenericBlockSchema = z
   })
   .passthrough();
 
+export const SlackFileSchema = z
+  .object({
+    id: z.string().min(1),
+    mimetype: z.string().nullish(),
+    filetype: z.string().nullish(),
+    name: z.string().nullish(),
+    title: z.string().nullish(),
+    url_private: z.string().nullish(),
+  })
+  .passthrough();
+
 export const SlackMessageSchema = z
   .object({
     channel: z.string().min(1).optional(),
@@ -32,7 +43,9 @@ export const SlackMessageSchema = z
     user: z.string().optional(),
     bot_id: z.string().optional(),
     blocks: z.array(z.union([SlackSectionBlockSchema, SlackGenericBlockSchema])).optional(),
+    files: z.array(SlackFileSchema).optional(),
   })
   .passthrough();
 
+export type SlackFile = z.infer<typeof SlackFileSchema>;
 export type SlackMessage = z.infer<typeof SlackMessageSchema>;
