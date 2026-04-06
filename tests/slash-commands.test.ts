@@ -447,4 +447,15 @@ describe('handleVersionCommand', () => {
     // The response should contain a short hash (7 chars) in backticks
     expect(result.text).toMatch(/`[\da-f]{7}`/);
   });
+
+  it('includes commit date and deploy date', () => {
+    const result = handleVersionCommand();
+
+    expect(result.text).toContain('Commit Date:');
+    expect(result.text).toContain('Deploy Date:');
+    // Deploy date should be a valid ISO string
+    const deployMatch = result.text.match(/Deploy Date:\*\s+(.+)/);
+    expect(deployMatch).toBeTruthy();
+    expect(new Date(deployMatch![1]).getTime()).not.toBeNaN();
+  });
 });

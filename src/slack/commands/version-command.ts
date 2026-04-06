@@ -2,24 +2,40 @@ import { execSync } from 'node:child_process';
 
 import type { SlashCommandResponse } from './types.js';
 
-let cachedVersion: string | undefined;
+interface VersionInfo {
+  commitDate: string;
+  hash: string;
+}
 
-function getGitHash(): string {
-  if (cachedVersion) return cachedVersion;
+const deployedAt = new Date().toISOString();
+let cached: VersionInfo | undefined;
+
+function getVersionInfo(): VersionInfo {
+  if (cached) return cached;
   try {
-    cachedVersion = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+    const hash = execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+    const commitDate = execSync('git log -1 --format=%cI HEAD', { encoding: 'utf-8' }).trim();
+    cached = { hash, commitDate };
   } catch {
-    cachedVersion = 'unknown';
+    cached = { hash: 'unknown', commitDate: 'unknown' };
   }
-  return cachedVersion;
+  return cached;
 }
 
 export function handleVersionCommand(): SlashCommandResponse {
-  const hash = getGitHash();
+  const { hash, commitDate } = getVersionInfo();
   const short = hash.length >= 7 ? hash.slice(0, 7) : hash;
+
+  const lines = [
+    '*Bot Version*',
+    '',
+    `• *Commit:* \`${short}\` (${hash})`,
+    `• *Commit Date:* ${commitDate}`,
+    `• *Deploy Date:* ${deployedAt}`,
+  ];
 
   return {
     response_type: 'ephemeral',
-    text: `*Bot Version*\n\n• *Commit:* \`${short}\` (${hash})`,
+    text: lines.join('\n'),
   };
 }
