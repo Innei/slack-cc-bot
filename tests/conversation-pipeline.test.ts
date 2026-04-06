@@ -131,13 +131,14 @@ function createMinimalPipelineContext(overrides?: {
   logger.withTag.mockReturnValue(logger);
 
   const unregister = vi.fn();
-  const threadExecutionRegistry =
-    overrides?.threadExecutionRegistry ??
-    ({
-      listActive: vi.fn().mockReturnValue([]),
-      register: vi.fn().mockReturnValue(unregister),
-      stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
-    } as ConversationPipelineContext['deps']['threadExecutionRegistry']);
+  const threadExecutionRegistry = {
+    listActive: vi.fn().mockReturnValue([]),
+    register: vi.fn().mockReturnValue(unregister),
+    stopAll: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
+    stopByMessage: vi.fn().mockResolvedValue({ failed: 0, stopped: 0 }),
+    trackMessage: vi.fn(),
+    ...overrides?.threadExecutionRegistry,
+  } as ConversationPipelineContext['deps']['threadExecutionRegistry'];
 
   return {
     client: {

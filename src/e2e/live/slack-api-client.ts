@@ -88,6 +88,14 @@ export class SlackApiClient {
     return this.call<SlackPostedMessageResponse>('chat.postMessage', args, 'POST');
   }
 
+  async addReaction(args: {
+    channel: string;
+    name: string;
+    timestamp: string;
+  }): Promise<Record<string, never>> {
+    return this.call<Record<string, never>>('reactions.add', args, 'POST');
+  }
+
   async conversationReplies(args: {
     channel: string;
     inclusive?: boolean;

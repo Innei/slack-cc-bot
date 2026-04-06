@@ -131,4 +131,63 @@ describe('createThreadExecutionRegistry', () => {
     expect(stop).toHaveBeenCalledTimes(2);
     expect(registry.listActive('t1')).toEqual([]);
   });
+
+  describe('trackMessage and stopByMessage', () => {
+    it('stopByMessage stops via tracked message ts', async () => {
+      const registry = createThreadExecutionRegistry();
+      const stop = vi.fn().mockResolvedValue(undefined);
+      registry.register(baseExecution({ executionId: 'e1', threadTs: 't1', stop }));
+      registry.trackMessage('user-msg-ts', 't1');
+
+      const result = await registry.stopByMessage('user-msg-ts', 'user_stop');
+
+      expect(stop).toHaveBeenCalledWith('user_stop');
+      expect(result).toEqual({ stopped: 1, failed: 0 });
+    });
+
+    it('stopByMessage falls through to stopAll when messageTs is a threadTs', async () => {
+      const registry = createThreadExecutionRegistry();
+      const stop = vi.fn().mockResolvedValue(undefined);
+      registry.register(baseExecution({ executionId: 'e1', threadTs: 't1', stop }));
+
+      const result = await registry.stopByMessage('t1', 'user_stop');
+
+      expect(stop).toHaveBeenCalledWith('user_stop');
+      expect(result).toEqual({ stopped: 1, failed: 0 });
+    });
+
+    it('stopByMessage returns zero counts for unknown message ts', async () => {
+      const registry = createThreadExecutionRegistry();
+      registry.register(baseExecution({ executionId: 'e1', threadTs: 't1' }));
+
+      const result = await registry.stopByMessage('unknown-ts', 'user_stop');
+
+      expect(result).toEqual({ stopped: 0, failed: 0 });
+    });
+
+    it('tracked messages are cleaned up when last execution in thread is unregistered', async () => {
+      const registry = createThreadExecutionRegistry();
+      const cleanup = registry.register(baseExecution({ executionId: 'e1', threadTs: 't1' }));
+      registry.trackMessage('msg1', 't1');
+      registry.trackMessage('msg2', 't1');
+
+      cleanup();
+
+      const result = await registry.stopByMessage('msg1', 'user_stop');
+      expect(result).toEqual({ stopped: 0, failed: 0 });
+    });
+
+    it('tracked messages survive when other executions remain in thread', async () => {
+      const registry = createThreadExecutionRegistry();
+      const stop = vi.fn().mockResolvedValue(undefined);
+      const cleanup1 = registry.register(baseExecution({ executionId: 'e1', threadTs: 't1' }));
+      registry.register(baseExecution({ executionId: 'e2', threadTs: 't1', stop }));
+      registry.trackMessage('msg1', 't1');
+
+      cleanup1();
+
+      const result = await registry.stopByMessage('msg1', 'user_stop');
+      expect(result.stopped).toBe(1);
+    });
+  });
 });

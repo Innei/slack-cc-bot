@@ -3,7 +3,6 @@ import type { App } from '@slack/bolt';
 import { handleMemoryCommand } from './memory-command.js';
 import { handleProviderCommand } from './provider-command.js';
 import { handleSessionCommand } from './session-command.js';
-import { handleStopCommand } from './stop-command.js';
 import type { SlashCommandDependencies, SlashCommandResponse } from './types.js';
 import { handleUsageCommand } from './usage-command.js';
 import { handleWorkspaceCommand } from './workspace-command.js';
@@ -62,30 +61,7 @@ export function registerSlashCommands(app: App, deps: SlashCommandDependencies):
     }
   });
 
-  app.command('/stop', async ({ ack, command }) => {
-    deps.logger.info('Slash command /stop invoked by %s', command.user_id);
-    try {
-      const threadTs =
-        typeof command.thread_ts === 'string' && command.thread_ts.trim()
-          ? command.thread_ts.trim()
-          : undefined;
-      const response = await handleStopCommand({
-        logger: deps.logger,
-        threadExecutionRegistry: deps.threadExecutionRegistry,
-        threadTs,
-      });
-      await ack(response);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      deps.logger.error('Slash command /stop failed: %s', message);
-      await ack({
-        response_type: 'ephemeral',
-        text: 'An error occurred while processing `/stop`. Please try again.',
-      });
-    }
-  });
-
-  const allCommandNames = [...COMMANDS.map((c) => c.name), '/provider', '/stop'];
+  const allCommandNames = [...COMMANDS.map((c) => c.name), '/provider'];
   deps.logger.info(
     'Registered %d slash commands: %s',
     allCommandNames.length,

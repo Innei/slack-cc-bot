@@ -209,6 +209,8 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     userId: message.user,
   });
 
+  deps.threadExecutionRegistry.trackMessage(message.ts, threadTs);
+
   try {
     runtimeInfo(
       deps.logger,

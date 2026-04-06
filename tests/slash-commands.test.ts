@@ -9,7 +9,6 @@ import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import { handleSessionCommand } from '~/slack/commands/session-command.js';
-import { handleStopCommand } from '~/slack/commands/stop-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { handleUsageCommand } from '~/slack/commands/usage-command.js';
 import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
@@ -169,6 +168,8 @@ function createMockThreadExecutionRegistry(): ThreadExecutionRegistry {
     listActive: vi.fn(() => []),
     register: vi.fn(() => () => {}),
     stopAll: vi.fn(async () => ({ stopped: 0, failed: 0 })),
+    stopByMessage: vi.fn(async () => ({ stopped: 0, failed: 0 })),
+    trackMessage: vi.fn(),
   };
 }
 
@@ -427,69 +428,5 @@ describe('handleSessionCommand', () => {
     const result = handleSessionCommand('ts-bare', deps);
     expect(result.text).toContain('not set');
     expect(result.text).toContain('none');
-  });
-});
-
-describe('handleStopCommand', () => {
-  it('requires thread context', async () => {
-    const stopAll = vi.fn();
-    const deps = createTestDeps({
-      threadExecutionRegistry: {
-        listActive: () => [],
-        register: () => () => {},
-        stopAll,
-      },
-    });
-
-    const result = await handleStopCommand({
-      logger: deps.logger,
-      threadExecutionRegistry: deps.threadExecutionRegistry,
-      threadTs: undefined,
-    });
-
-    expect(result.response_type).toBe('ephemeral');
-    expect(result.text).toBe('Use `/stop` inside the thread you want to stop.');
-    expect(stopAll).not.toHaveBeenCalled();
-  });
-
-  it('returns a no-op message when the thread has no active executions', async () => {
-    const stopAll = vi.fn(async () => ({ stopped: 0, failed: 0 }));
-    const deps = createTestDeps({
-      threadExecutionRegistry: {
-        listActive: () => [],
-        register: () => () => {},
-        stopAll,
-      },
-    });
-
-    const result = await handleStopCommand({
-      logger: deps.logger,
-      threadExecutionRegistry: deps.threadExecutionRegistry,
-      threadTs: '1712345678.000100',
-    });
-
-    expect(result.response_type).toBe('ephemeral');
-    expect(result.text).toBe('There is no in-progress reply in this thread.');
-    expect(stopAll).toHaveBeenCalledWith('1712345678.000100', 'user_stop');
-  });
-
-  it('reports how many executions were stopped and failed', async () => {
-    const stopAll = vi.fn(async () => ({ stopped: 2, failed: 1 }));
-    const deps = createTestDeps({
-      threadExecutionRegistry: {
-        listActive: () => [],
-        register: () => () => {},
-        stopAll,
-      },
-    });
-
-    const result = await handleStopCommand({
-      logger: deps.logger,
-      threadExecutionRegistry: deps.threadExecutionRegistry,
-      threadTs: '1712345678.000100',
-    });
-
-    expect(result.response_type).toBe('ephemeral');
-    expect(result.text).toBe('Stopped 2 in-progress replies. Failed to stop 1 reply.');
   });
 });

@@ -11,9 +11,17 @@ interface SlackManifestSlashCommand {
   usage_hint?: string;
 }
 
+interface SlackManifestShortcut {
+  callback_id: string;
+  description: string;
+  name: string;
+  type: 'global' | 'message';
+}
+
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
+    shortcuts?: SlackManifestShortcut[];
     slash_commands?: SlackManifestSlashCommand[];
     [key: string]: unknown;
   };
@@ -67,10 +75,14 @@ const DESIRED_COMMANDS: SlackManifestSlashCommand[] = [
     description: 'View or switch the AI provider for this thread',
     usage_hint: '[list|reset|<provider-id>]',
   },
+];
+
+const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
   {
-    command: '/stop',
-    description: 'Stop all in-progress bot replies in the current thread',
-    usage_hint: ' ',
+    name: 'Stop Reply',
+    type: 'message',
+    callback_id: 'stop_reply_action',
+    description: "Stop the bot's in-progress reply in this thread",
   },
 ];
 
@@ -104,32 +116,57 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
 
   const existingCommands = currentManifest.features?.slash_commands ?? [];
   const existingNames = new Set(existingCommands.map((c) => c.command));
-  const missing = DESIRED_COMMANDS.filter((c) => !existingNames.has(c.command));
+  const missingCommands = DESIRED_COMMANDS.filter((c) => !existingNames.has(c.command));
 
-  if (missing.length === 0) {
-    logger.info('All %d slash commands already registered', DESIRED_COMMANDS.length);
+  const existingShortcuts = currentManifest.features?.shortcuts ?? [];
+  const existingCallbackIds = new Set(existingShortcuts.map((s) => s.callback_id));
+  const missingShortcuts = DESIRED_SHORTCUTS.filter((s) => !existingCallbackIds.has(s.callback_id));
+
+  // Remove /stop if still present in manifest (replaced by reaction + shortcut)
+  const commandsToKeep = (
+    missingCommands.length > 0 ? [...existingCommands, ...missingCommands] : existingCommands
+  ).filter((c) => c.command !== '/stop');
+  const commandsChanged =
+    missingCommands.length > 0 || commandsToKeep.length !== existingCommands.length;
+
+  if (!commandsChanged && missingShortcuts.length === 0) {
+    logger.info(
+      'All %d slash commands and %d shortcuts already registered',
+      DESIRED_COMMANDS.length,
+      DESIRED_SHORTCUTS.length,
+    );
     return;
   }
 
-  logger.info(
-    'Registering %d missing slash commands: %s',
-    missing.length,
-    missing.map((c) => c.command).join(', '),
-  );
+  if (missingCommands.length > 0) {
+    logger.info(
+      'Registering %d missing slash commands: %s',
+      missingCommands.length,
+      missingCommands.map((c) => c.command).join(', '),
+    );
+  }
+  if (missingShortcuts.length > 0) {
+    logger.info(
+      'Registering %d missing shortcuts: %s',
+      missingShortcuts.length,
+      missingShortcuts.map((s) => s.name).join(', '),
+    );
+  }
 
   const updatedManifest: SlackManifest = {
     ...currentManifest,
     features: {
       ...currentManifest.features,
-      slash_commands: [...existingCommands, ...missing],
+      slash_commands: commandsToKeep,
+      shortcuts: [...existingShortcuts, ...missingShortcuts],
     },
   };
 
   const success = await updateManifest(appId, accessToken, updatedManifest);
   if (success) {
-    logger.info('Slash commands registered successfully');
+    logger.info('Manifest updated successfully');
   } else {
-    logger.error('Failed to update app manifest with slash commands');
+    logger.error('Failed to update app manifest');
   }
 }
 

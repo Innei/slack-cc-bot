@@ -17,6 +17,11 @@ import {
   createThreadReplyHandler,
   WORKSPACE_PICKER_ACTION_ID,
 } from './ingress/app-mention-handler.js';
+import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
+import {
+  createStopMessageActionHandler,
+  STOP_MESSAGE_ACTION_CALLBACK_ID,
+} from './interactions/stop-message-action.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
@@ -68,6 +73,13 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
 
   app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
+  app.event(
+    'reaction_added',
+    createReactionStopHandler({
+      logger: deps.logger.withTag('slack:reaction-stop'),
+      threadExecutionRegistry: deps.threadExecutionRegistry,
+    }),
+  );
   registerSlashCommands(app, {
     logger: deps.logger.withTag('slack:commands'),
     memoryStore: deps.memoryStore,
@@ -79,6 +91,13 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   app.shortcut(
     { callback_id: WORKSPACE_MESSAGE_ACTION_CALLBACK_ID, type: 'message_action' },
     createWorkspaceMessageActionHandler(ingressDeps),
+  );
+  app.shortcut(
+    { callback_id: STOP_MESSAGE_ACTION_CALLBACK_ID, type: 'message_action' },
+    createStopMessageActionHandler({
+      logger: deps.logger.withTag('slack:stop-action'),
+      threadExecutionRegistry: deps.threadExecutionRegistry,
+    }),
   );
   app.view(WORKSPACE_MODAL_CALLBACK_ID, createWorkspaceSelectionViewHandler(ingressDeps));
   app.action(WORKSPACE_PICKER_ACTION_ID, createWorkspacePickerActionHandler(ingressDeps) as any);

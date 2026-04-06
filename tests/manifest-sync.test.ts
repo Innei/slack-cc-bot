@@ -132,7 +132,14 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'test' },
               { command: '/session', description: 'test' },
               { command: '/provider', description: 'test' },
-              { command: '/stop', description: 'test' },
+            ],
+            shortcuts: [
+              {
+                name: 'Stop Reply',
+                type: 'message',
+                callback_id: 'stop_reply_action',
+                description: 'test',
+              },
             ],
           },
         },
@@ -186,7 +193,14 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
-                { command: '/stop', description: 'test' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'test',
+                },
               ],
             },
           },
@@ -250,7 +264,14 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/memory', description: 'test' },
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
-                { command: '/stop', description: 'test' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'test',
+                },
               ],
             },
           },
@@ -306,10 +327,13 @@ describe('syncSlashCommands with token rotation', () => {
 
     const body = JSON.parse(updateInit.body as string);
     const commands = body.manifest.features.slash_commands;
-    expect(commands).toHaveLength(6);
+    expect(commands).toHaveLength(5);
     expect(commands.map((c: { command: string }) => c.command)).toEqual(
-      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session', '/provider', '/stop']),
+      expect.arrayContaining(['/usage', '/workspace', '/memory', '/session', '/provider']),
     );
+    const shortcuts = body.manifest.features.shortcuts;
+    expect(shortcuts).toHaveLength(1);
+    expect(shortcuts[0].callback_id).toBe('stop_reply_action');
   });
 
   it('skips update when all commands exist', async () => {
@@ -326,7 +350,14 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/memory', description: 'x' },
               { command: '/session', description: 'x' },
               { command: '/provider', description: 'x' },
-              { command: '/stop', description: 'x' },
+            ],
+            shortcuts: [
+              {
+                name: 'Stop Reply',
+                type: 'message',
+                callback_id: 'stop_reply_action',
+                description: 'x',
+              },
             ],
           },
         },

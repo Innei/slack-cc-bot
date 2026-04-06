@@ -97,6 +97,12 @@ export interface SlackFilesApi {
 
 export interface SlackChatApi {
   delete: (args: { channel: string; ts: string }) => Promise<unknown>;
+  postEphemeral?: (args: {
+    channel: string;
+    text: string;
+    thread_ts?: string;
+    user: string;
+  }) => Promise<unknown>;
   postMessage: (args: {
     blocks?: unknown[];
     channel: string;

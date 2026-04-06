@@ -19,10 +19,23 @@ export interface ThreadExecutionRegistry {
   listActive: (threadTs: string) => RegisteredThreadExecution[];
   register: (execution: RegisteredThreadExecution) => () => void;
   stopAll: (threadTs: string, reason: ThreadExecutionStopReason) => Promise<StopAllResult>;
+  stopByMessage: (messageTs: string, reason: ThreadExecutionStopReason) => Promise<StopAllResult>;
+  trackMessage: (messageTs: string, threadTs: string) => void;
 }
 
 export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
   const byThread = new Map<string, Map<string, RegisteredThreadExecution>>();
+  const messageToThread = new Map<string, string>();
+  const threadToMessages = new Map<string, Set<string>>();
+
+  function cleanupMessagesForThread(threadTs: string): void {
+    const messages = threadToMessages.get(threadTs);
+    if (!messages) return;
+    for (const ts of messages) {
+      messageToThread.delete(ts);
+    }
+    threadToMessages.delete(threadTs);
+  }
 
   return {
     listActive(threadTs) {
@@ -45,8 +58,30 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
         b.delete(execution.executionId);
         if (b.size === 0) {
           byThread.delete(execution.threadTs);
+          cleanupMessagesForThread(execution.threadTs);
         }
       };
+    },
+
+    trackMessage(messageTs, threadTs) {
+      messageToThread.set(messageTs, threadTs);
+      let set = threadToMessages.get(threadTs);
+      if (!set) {
+        set = new Set();
+        threadToMessages.set(threadTs, set);
+      }
+      set.add(messageTs);
+    },
+
+    async stopByMessage(messageTs, reason) {
+      if (byThread.has(messageTs)) {
+        return this.stopAll(messageTs, reason);
+      }
+      const threadTs = messageToThread.get(messageTs);
+      if (threadTs) {
+        return this.stopAll(threadTs, reason);
+      }
+      return { failed: 0, stopped: 0 };
     },
 
     async stopAll(threadTs, reason) {

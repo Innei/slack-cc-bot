@@ -31,7 +31,8 @@ Run [Anthropic Claude Agent SDK](https://docs.anthropic.com/en/docs/agents) nati
 - **Workspace-aware routing** — each Slack thread binds to a specific repo/workdir instead of the bot process `cwd`
 - **Message Action fallback** — manually choose a repo/path when automatic detection is missing or ambiguous
 - **Slash commands** — `/usage`, `/workspace`, `/memory`, `/session` for bot introspection and management
-- **Auto-provisioning** — slash commands are automatically registered to the Slack App manifest on startup
+- **Stop controls** — react with 🛑 on any thread message or use the "Stop Reply" message shortcut to cancel in-progress replies
+- **Auto-provisioning** — slash commands and shortcuts are automatically registered to the Slack App manifest on startup
 - **UI state management** — Claude can set status text and loading indicators via a custom MCP tool
 - **Strict validation** — all external inputs (env, Slack events, tool calls) validated with Zod
 - **Secret redaction** in logs
@@ -321,9 +322,20 @@ The bot registers four slash commands for introspection and management:
 
 All responses are **ephemeral** (only visible to the invoking user).
 
+### Stopping in-progress replies
+
+Two mechanisms are available to cancel an active bot reply:
+
+| Method               | How to use                                                                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Emoji reaction**   | Add a 🛑 (`:octagonal_sign:`) or 🚫 (`:stop_sign:`) reaction to any message in the thread (the trigger message, the bot's progress message, or the thread root) |
+| **Message shortcut** | Right-click (or `⋯` menu) on any message in the thread → **Stop Reply**                                                                                         |
+
+Both stop all active executions in the thread and finalize the bot's progress message as "stopped."
+
 ### Automatic manifest sync
 
-When `SLACK_APP_ID` is set along with `SLACK_CONFIG_REFRESH_TOKEN` (or `SLACK_CONFIG_TOKEN`), the bot automatically registers any missing slash commands to the Slack App manifest on startup via the [App Manifest API](https://api.slack.com/reference/manifests). No manual configuration in the Slack dashboard is needed.
+When `SLACK_APP_ID` is set along with `SLACK_CONFIG_REFRESH_TOKEN` (or `SLACK_CONFIG_TOKEN`), the bot automatically registers any missing slash commands and shortcuts to the Slack App manifest on startup via the [App Manifest API](https://api.slack.com/reference/manifests). No manual configuration in the Slack dashboard is needed.
 
 **Token rotation:** Slack configuration tokens expire every 12 hours. If you provide `SLACK_CONFIG_REFRESH_TOKEN`, the bot calls [`tooling.tokens.rotate`](https://api.slack.com/methods/tooling.tokens.rotate) on each startup and persists the new token pair to `data/slack-config-tokens.json`. This means you only need to set the refresh token once.
 
