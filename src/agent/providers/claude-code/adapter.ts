@@ -10,8 +10,7 @@ import type { MemoryStore } from '~/memory/types.js';
 
 import { createAnthropicAgentSdkMcpServer } from './mcp-server.js';
 import { handleClaudeSdkMessage } from './messages.js';
-import { buildClaudePromptInput } from './multimodal-prompt.js';
-import { buildSystemPrompt } from './prompts.js';
+import { runPromptPipeline } from './prompt-pipeline/index.js';
 import { buildRuntimeUiState, createRuntimeUiStateTracker } from './runtime-ui.js';
 import type { MessageHandlers, RuntimeUiStateTracker } from './types.js';
 
@@ -108,7 +107,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       request,
       sink,
     );
-    const prompt = buildClaudePromptInput(request);
+    const { systemPrompt, userPrompt } = runPromptPipeline(request);
 
     this.logger.info(
       'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s, cwd=%s)',
@@ -123,7 +122,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     let session: ReturnType<typeof query>;
     try {
       session = query({
-        prompt,
+        prompt: userPrompt,
         options: {
           ...(env.CLAUDE_MODEL ? { model: env.CLAUDE_MODEL } : {}),
           agentProgressSummaries: true,
@@ -131,7 +130,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           includePartialMessages: true,
           maxTurns: env.CLAUDE_MAX_TURNS,
           ...(request.workspacePath ? { cwd: request.workspacePath } : {}),
-          systemPrompt: buildSystemPrompt(request),
+          systemPrompt,
           mcpServers: {
             'slack-ui': mcpServer,
           },
