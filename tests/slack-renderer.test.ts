@@ -78,15 +78,15 @@ describe('SlackRenderer.postGeneratedImages', () => {
     expect(failed).toEqual([]);
     expect(uploadCalls).toHaveLength(2);
     expect(uploadCalls[0]).toMatchObject({
-      channel: 'C1',
+      channel_id: 'C1',
       thread_ts: 'ts-root',
       filename: 'a.png',
       title: 'a.png',
-      alt_txt: 'a.png',
+      alt_text: 'a.png',
     });
     expect(uploadCalls[0]!.file.equals(Buffer.from('png-a'))).toBe(true);
     expect(uploadCalls[1]).toMatchObject({
-      channel: 'C1',
+      channel_id: 'C1',
       thread_ts: 'ts-root',
       filename: 'b.png',
     });

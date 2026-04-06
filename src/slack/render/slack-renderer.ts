@@ -326,8 +326,8 @@ export class SlackRenderer {
       let response: SlackFilesUploadV2Response;
       try {
         response = await client.files.uploadV2({
-          alt_txt: meta.fileName,
-          channel: channelId,
+          alt_text: meta.fileName,
+          channel_id: channelId,
           file: bytes,
           filename: meta.fileName,
           thread_ts: threadTs,

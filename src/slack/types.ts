@@ -86,8 +86,8 @@ export interface SlackFilesUploadV2Response {
 
 export interface SlackFilesApi {
   uploadV2: (args: {
-    alt_txt?: string;
-    channel: string;
+    alt_text?: string;
+    channel_id: string;
     file: Buffer;
     filename: string;
     thread_ts: string;
