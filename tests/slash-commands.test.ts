@@ -11,6 +11,7 @@ import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import { handleSessionCommand } from '~/slack/commands/session-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
 import { handleUsageCommand } from '~/slack/commands/usage-command.js';
+import { handleVersionCommand } from '~/slack/commands/version-command.js';
 import { handleWorkspaceCommand } from '~/slack/commands/workspace-command.js';
 import type { ThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -428,5 +429,33 @@ describe('handleSessionCommand', () => {
     const result = handleSessionCommand('ts-bare', deps);
     expect(result.text).toContain('not set');
     expect(result.text).toContain('none');
+  });
+});
+
+describe('handleVersionCommand', () => {
+  it('returns ephemeral response with commit hash', () => {
+    const result = handleVersionCommand();
+
+    expect(result.response_type).toBe('ephemeral');
+    expect(result.text).toContain('Bot Version');
+    expect(result.text).toContain('Commit:');
+  });
+
+  it('includes a short hash prefix', () => {
+    const result = handleVersionCommand();
+
+    // The response should contain a short hash (7 chars) in backticks
+    expect(result.text).toMatch(/`[\da-f]{7}`/);
+  });
+
+  it('includes commit date and deploy date', () => {
+    const result = handleVersionCommand();
+
+    expect(result.text).toContain('Commit Date:');
+    expect(result.text).toContain('Deploy Date:');
+    // Deploy date should be a valid ISO string
+    const deployMatch = result.text.match(/Deploy Date:\*\s+(.+)/);
+    expect(deployMatch).toBeTruthy();
+    expect(new Date(deployMatch![1]).getTime()).not.toBeNaN();
   });
 });

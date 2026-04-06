@@ -5,6 +5,7 @@ import { handleProviderCommand } from './provider-command.js';
 import { handleSessionCommand } from './session-command.js';
 import type { SlashCommandDependencies, SlashCommandResponse } from './types.js';
 import { handleUsageCommand } from './usage-command.js';
+import { handleVersionCommand } from './version-command.js';
 import { handleWorkspaceCommand } from './workspace-command.js';
 
 interface CommandRegistration {
@@ -17,6 +18,7 @@ const COMMANDS: CommandRegistration[] = [
   { name: '/workspace', handler: handleWorkspaceCommand },
   { name: '/memory', handler: handleMemoryCommand },
   { name: '/session', handler: handleSessionCommand },
+  { name: '/version', handler: () => handleVersionCommand() },
 ];
 
 export function registerSlashCommands(app: App, deps: SlashCommandDependencies): void {
