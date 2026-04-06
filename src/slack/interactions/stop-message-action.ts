@@ -1,4 +1,5 @@
 import type { AppLogger } from '~/logger/index.js';
+import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackMessageActionShortcutSchema } from '~/schemas/slack/message-action-shortcut.js';
 
 import type { ThreadExecutionRegistry } from '../execution/thread-execution-registry.js';
@@ -16,7 +17,11 @@ export function createStopMessageActionHandler(deps: StopMessageActionDependenci
     const { ack, client } = args;
     await ack();
 
-    const parsed = SlackMessageActionShortcutSchema.parse(args.shortcut);
+    const parsed = zodParse(
+      SlackMessageActionShortcutSchema,
+      args.shortcut,
+      'SlackMessageActionShortcut',
+    );
     const threadTs = parsed.message.thread_ts ?? parsed.message.ts;
     const channelId = parsed.channel.id;
 

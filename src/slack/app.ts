@@ -114,7 +114,8 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
   app.assistant(assistant);
 
   app.error(async (error) => {
-    deps.logger.error('Slack Bolt unhandled error: %s', error.message ?? String(error));
+    const message = error.message ?? String(error);
+    deps.logger.error('Slack Bolt unhandled error: %s', message);
   });
 
   return app;

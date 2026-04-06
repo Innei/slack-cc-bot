@@ -1,5 +1,7 @@
 import type { z } from 'zod';
 
+import { zodParse } from '~/schemas/safe-parse.js';
+
 import { ClaudeUiStateSchema } from '../schemas/publish-state.js';
 
 export const SLACK_UI_STATE_TOOL_NAME = 'publish_state';
@@ -9,5 +11,5 @@ export const SLACK_UI_STATE_TOOL_DESCRIPTION =
 export type SlackUiStateToolInput = z.infer<typeof ClaudeUiStateSchema>;
 
 export function parseSlackUiStateToolInput(input: unknown): SlackUiStateToolInput {
-  return ClaudeUiStateSchema.parse(input);
+  return zodParse(ClaudeUiStateSchema, input, 'ClaudeUiState');
 }

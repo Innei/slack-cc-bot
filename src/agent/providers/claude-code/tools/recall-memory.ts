@@ -1,3 +1,5 @@
+import { zodParse } from '~/schemas/safe-parse.js';
+
 import {
   type RecallMemoryToolInput,
   RecallMemoryToolInputSchema,
@@ -8,5 +10,5 @@ export const RECALL_MEMORY_TOOL_DESCRIPTION =
   'Retrieve memories from previous sessions. Supports both global (cross-workspace) and workspace-scoped memories.';
 
 export function parseRecallMemoryToolInput(input: unknown): RecallMemoryToolInput {
-  return RecallMemoryToolInputSchema.parse(input);
+  return zodParse(RecallMemoryToolInputSchema, input, 'RecallMemoryToolInput');
 }

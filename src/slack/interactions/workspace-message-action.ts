@@ -1,3 +1,4 @@
+import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackMessageActionShortcutSchema } from '~/schemas/slack/message-action-shortcut.js';
 import type { ResolvedWorkspace } from '~/workspace/types.js';
 
@@ -33,7 +34,11 @@ export function createWorkspaceMessageActionHandler(deps: SlackIngressDependenci
     const { ack, client, shortcut } = args;
     await ack();
 
-    const parsed = SlackMessageActionShortcutSchema.parse(shortcut);
+    const parsed = zodParse(
+      SlackMessageActionShortcutSchema,
+      shortcut,
+      'SlackMessageActionShortcut',
+    );
     const detectedWorkspace = deps.workspaceResolver.resolveFromText(parsed.message.text, 'manual');
     const initialWorkspace =
       detectedWorkspace.status === 'unique' ? detectedWorkspace.workspace : undefined;

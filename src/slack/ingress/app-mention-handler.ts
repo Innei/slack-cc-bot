@@ -2,6 +2,7 @@ import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware }
 
 import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
+import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
 
@@ -35,15 +36,7 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
-    const parsed = SlackAppMentionEventSchema.safeParse(args.event);
-    if (!parsed.success) {
-      deps.logger.error(
-        'Failed to parse app_mention event: %s',
-        parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-      );
-      return;
-    }
-    const mention = parsed.data;
+    const mention = zodParse(SlackAppMentionEventSchema, args.event, 'SlackAppMentionEvent');
     await handleThreadConversation(args.client as SlackWebClientLike, mention, deps, {
       logLabel: 'app mention',
       addAcknowledgementReaction: true,
