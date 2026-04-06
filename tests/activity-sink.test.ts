@@ -483,4 +483,42 @@ describe('createActivitySink', () => {
       '_Stopped by user._',
     );
   });
+
+  it('deletes superseded progress instead of showing stopped-by-user UI', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        status: 'Reading files...',
+        activities: ['Reading src/index.ts...'],
+        clear: false,
+      },
+    });
+    await sink.onEvent({ type: 'lifecycle', phase: 'stopped', reason: 'superseded' });
+    await sink.finalize();
+
+    expect(renderer.deleteThreadProgressMessage).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'progress-ts',
+    );
+    expect(renderer.finalizeThreadProgressMessageStopped).not.toHaveBeenCalled();
+    expect(renderer.postThreadReply).not.toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      '_Stopped by user._',
+    );
+  });
 });

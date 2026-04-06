@@ -92,29 +92,40 @@ describe('createThreadExecutionRegistry', () => {
     expect(result).toEqual({ stopped: 2, failed: 1 });
   });
 
-  it('concurrent stopAll for the same thread sees an empty bucket on the second call', async () => {
+  it('concurrent stopAll for the same thread waits for the existing drain to finish', async () => {
     const registry = createThreadExecutionRegistry();
-    let unblockStop: () => void;
-    const stopBlocked = new Promise<void>((resolve) => {
-      unblockStop = resolve;
+    let unblockCompletion: () => void;
+    const completionPromise = new Promise<void>((resolve) => {
+      unblockCompletion = resolve;
     });
-    const stop = vi.fn(async (_reason: ThreadExecutionStopReason) => {
-      await stopBlocked;
-    });
-    registry.register(baseExecution({ executionId: 'e1', threadTs: 't1', stop }));
+    const stop = vi.fn().mockResolvedValue(undefined);
+    registry.register(
+      baseExecution({
+        executionId: 'e1',
+        threadTs: 't1',
+        stop,
+        completionPromise,
+      }),
+    );
 
     const first = registry.stopAll('t1', 'user_stop');
     await vi.waitFor(() => {
       expect(stop).toHaveBeenCalledTimes(1);
     });
 
-    await expect(registry.stopAll('t1', 'user_stop')).resolves.toEqual({
-      stopped: 0,
-      failed: 0,
+    let secondResolved = false;
+    const second = registry.stopAll('t1', 'user_stop').then((result) => {
+      secondResolved = true;
+      return result;
     });
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    expect(secondResolved).toBe(false);
 
-    unblockStop!();
+    unblockCompletion!();
     await expect(first).resolves.toEqual({ stopped: 1, failed: 0 });
+    await expect(second).resolves.toEqual({ stopped: 1, failed: 0 });
     expect(registry.listActive('t1')).toEqual([]);
   });
 

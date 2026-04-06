@@ -89,15 +89,25 @@ export async function stopActiveExecutionsStep(
 ): Promise<PipelineStepResult> {
   const { deps, threadTs } = ctx;
   const active = deps.threadExecutionRegistry.listActive(threadTs);
-  if (active.length === 0) return CONTINUE;
-
-  runtimeInfo(
-    deps.logger,
-    'Stopping %d active execution(s) in thread %s before processing new message',
-    active.length,
-    threadTs,
-  );
   const result = await deps.threadExecutionRegistry.stopAll(threadTs, 'superseded');
+  if (active.length === 0 && result.stopped === 0 && result.failed === 0) {
+    return CONTINUE;
+  }
+
+  if (active.length > 0) {
+    runtimeInfo(
+      deps.logger,
+      'Stopping %d active execution(s) in thread %s before processing new message',
+      active.length,
+      threadTs,
+    );
+  } else {
+    runtimeInfo(
+      deps.logger,
+      'Waiting for in-flight execution shutdown to finish in thread %s before processing new message',
+      threadTs,
+    );
+  }
   runtimeInfo(
     deps.logger,
     'Stopped %d execution(s) in thread %s (failed=%d)',

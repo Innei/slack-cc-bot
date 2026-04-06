@@ -266,13 +266,13 @@ describe('acknowledgeAndLog step', () => {
 });
 
 describe('stopActiveExecutionsStep', () => {
-  it('continues immediately when no active executions exist', async () => {
+  it('continues when the thread is already idle', async () => {
     const ctx = createMinimalPipelineContext();
 
     const result = await stopActiveExecutionsStep(ctx);
 
     expect(result.action).toBe('continue');
-    expect(ctx.deps.threadExecutionRegistry.stopAll).not.toHaveBeenCalled();
+    expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'superseded');
   });
 
   it('stops active executions and refreshes session', async () => {
@@ -309,6 +309,41 @@ describe('stopActiveExecutionsStep', () => {
     expect(ctx.deps.threadExecutionRegistry.stopAll).toHaveBeenCalledWith('ts1', 'superseded');
     // existingSession should be refreshed from store
     expect(ctx.existingSession?.claudeSessionId).toBe('saved-session-id');
+  });
+
+  it('waits for an in-flight stop to finish even when no executions are currently listed', async () => {
+    const ctx = createMinimalPipelineContext();
+    let unblockStop: () => void;
+    const stopBlocked = new Promise<{ failed: number; stopped: number }>((resolve) => {
+      unblockStop = () => {
+        ctx.deps.sessionStore.upsert({
+          channelId: 'C123',
+          claudeSessionId: 'persisted-after-drain',
+          createdAt: '',
+          rootMessageTs: 'ts1',
+          threadTs: 'ts1',
+          updatedAt: '',
+        });
+        resolve({ failed: 0, stopped: 1 });
+      };
+    });
+    vi.mocked(ctx.deps.threadExecutionRegistry.listActive).mockReturnValue([]);
+    vi.mocked(ctx.deps.threadExecutionRegistry.stopAll).mockReturnValue(stopBlocked);
+
+    let resolved = false;
+    const resultPromise = stopActiveExecutionsStep(ctx).then((result) => {
+      resolved = true;
+      return result;
+    });
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 10);
+    });
+    expect(resolved).toBe(false);
+
+    unblockStop!();
+    await expect(resultPromise).resolves.toEqual({ action: 'continue' });
+    expect(ctx.existingSession?.claudeSessionId).toBe('persisted-after-drain');
   });
 });
 

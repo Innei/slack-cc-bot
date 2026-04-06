@@ -141,6 +141,32 @@ describe('thread reply ingress', () => {
 
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
   });
+
+  it('allows app mentions even when Slack omits the team id', async () => {
+    const threadTs = '1712345678.000107';
+    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+
+    await appMentionHandler({
+      client,
+      event: {
+        channel: 'C123',
+        text: '<@U_BOT> continue with the deliverable',
+        ts: threadTs,
+        type: 'app_mention',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(request).toMatchObject({
+      channelId: 'C123',
+      mentionText: '<@U_BOT> continue with the deliverable',
+      threadTs,
+      userId: 'U123',
+    });
+  });
 });
 
 function createThreadReplyTestHarness(threadTs: string): {

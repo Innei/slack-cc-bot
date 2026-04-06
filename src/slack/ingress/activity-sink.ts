@@ -44,6 +44,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let pendingGeneratedFiles: GeneratedOutputFile[] = [];
   let pendingGeneratedImages: GeneratedImageFile[] = [];
   let executionCompletedSuccessfully = false;
+  let terminalStopReason:
+    | Extract<AgentExecutionEvent, { type: 'lifecycle'; phase: 'stopped' }>['reason']
+    | undefined;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -223,6 +226,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
     if (event.phase === 'stopped') {
       terminalPhase = 'stopped';
+      terminalStopReason = event.reason;
       if (event.reason !== 'superseded' && !progressMessageTs) {
         await renderer.postThreadReply(client, channel, threadTs, '_Stopped by user._');
       }
@@ -307,17 +311,25 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       }
       if (progressMessageTs) {
         if (terminalPhase === 'stopped') {
-          await renderer
-            .finalizeThreadProgressMessageStopped(
-              client,
-              channel,
-              threadTs,
-              progressMessageTs,
-              toolHistory,
-            )
-            .catch((err) => {
-              logger.warn('Failed to finalize stopped progress message: %s', String(err));
-            });
+          if (terminalStopReason === 'superseded') {
+            await renderer
+              .deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs)
+              .catch((err) => {
+                logger.warn('Failed to delete superseded progress message: %s', String(err));
+              });
+          } else {
+            await renderer
+              .finalizeThreadProgressMessageStopped(
+                client,
+                channel,
+                threadTs,
+                progressMessageTs,
+                toolHistory,
+              )
+              .catch((err) => {
+                logger.warn('Failed to finalize stopped progress message: %s', String(err));
+              });
+          }
         } else {
           await renderer
             .finalizeThreadProgressMessage(

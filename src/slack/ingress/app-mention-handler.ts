@@ -37,15 +37,6 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = zodParse(SlackAppMentionEventSchema, args.event, 'SlackAppMentionEvent');
-    if (!mention.team) {
-      runtimeError(
-        deps.logger,
-        'Skipping app mention without team id for message %s in channel %s',
-        mention.ts,
-        mention.channel,
-      );
-      return;
-    }
     await handleThreadConversation(
       args.client as SlackWebClientLike,
       {
