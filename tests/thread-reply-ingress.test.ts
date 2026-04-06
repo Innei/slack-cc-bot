@@ -189,6 +189,9 @@ function createSlackClientFixture(): SlackWebClientLike & {
     conversations: {
       replies: vi.fn().mockResolvedValue({ messages: [] }),
     },
+    files: {
+      uploadV2: vi.fn().mockResolvedValue({ files: [{ id: 'F1' }] }),
+    },
     reactions: {
       add: vi.fn().mockResolvedValue({}),
     },
@@ -204,6 +207,7 @@ function createRendererStub(): SlackRenderer {
     clearUiState: vi.fn().mockResolvedValue(undefined),
     deleteThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
     finalizeThreadProgressMessage: vi.fn().mockResolvedValue(undefined),
+    postGeneratedImages: vi.fn().mockResolvedValue([]),
     postThreadReply: vi.fn().mockResolvedValue(undefined),
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),

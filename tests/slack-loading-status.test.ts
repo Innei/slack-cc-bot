@@ -601,6 +601,8 @@ function createExecutionRequest(
       messages: [],
       renderedPrompt: '',
       threadTs: '1712345678.000100',
+      loadedImages: [],
+      imageLoadFailures: [],
     },
     threadTs: '1712345678.000100',
     userId: 'U123',
@@ -747,6 +749,9 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         reactionCalls.push(args);
         return {};
       },
+    },
+    files: {
+      uploadV2: async () => ({ files: [{ id: 'F1' }] }),
     },
     views: {
       open: async () => ({}),

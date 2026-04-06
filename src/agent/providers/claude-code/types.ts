@@ -58,8 +58,10 @@ export interface RuntimeUiStateTracker {
 
 export interface MessageHandlers {
   collectAssistantText: (text: string) => void;
+  getSessionCwd: () => string | undefined;
   publishUiState: () => Promise<void>;
   runtimeUi: RuntimeUiStateTracker;
+  setSessionCwd: (cwd: string) => void;
   setSessionId: (id: string) => void;
 }
 

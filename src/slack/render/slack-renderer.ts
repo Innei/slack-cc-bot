@@ -1,9 +1,12 @@
+import { readFile } from 'node:fs/promises';
+
 import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks';
 
+import type { GeneratedImageFile } from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
-import type { SlackBlock, SlackWebClientLike } from '../types.js';
+import type { SlackBlock, SlackFilesUploadV2Response, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
 interface RendererUiState {
@@ -270,6 +273,76 @@ export class SlackRenderer {
     return lastTs;
   }
 
+  async postGeneratedImages(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    files: readonly GeneratedImageFile[],
+  ): Promise<GeneratedImageFile[]> {
+    const failed: GeneratedImageFile[] = [];
+
+    for (const meta of files) {
+      let bytes: Buffer;
+      try {
+        bytes = await readFile(meta.path);
+      } catch (error) {
+        this.logger.warn('Failed to read generated image at %s: %s', meta.path, String(error));
+        failed.push(meta);
+        continue;
+      }
+
+      let response: SlackFilesUploadV2Response;
+      try {
+        response = await client.files.uploadV2({
+          alt_txt: meta.fileName,
+          channel: channelId,
+          file: bytes,
+          filename: meta.fileName,
+          thread_ts: threadTs,
+          title: meta.fileName,
+        });
+      } catch (error) {
+        this.logger.warn('Failed to upload generated image %s: %s', meta.fileName, String(error));
+        failed.push(meta);
+        continue;
+      }
+
+      const fileId = extractUploadedFileId(response);
+      if (!fileId) {
+        this.logger.warn(
+          'Upload returned no file id for generated image %s; skipping image block',
+          meta.fileName,
+        );
+        failed.push(meta);
+        continue;
+      }
+
+      try {
+        await client.chat.postMessage({
+          blocks: [
+            {
+              alt_text: meta.fileName,
+              slack_file: { id: fileId },
+              type: 'image',
+            },
+          ],
+          channel: channelId,
+          text: meta.fileName,
+          thread_ts: threadTs,
+        });
+      } catch (error) {
+        this.logger.warn(
+          'Failed to post Slack image block for %s: %s',
+          meta.fileName,
+          String(error),
+        );
+        failed.push(meta);
+      }
+    }
+
+    return failed;
+  }
+
   private buildProgressMessageText(state: RendererUiState): string {
     const status = (state.status ?? '').trim() || DEFAULT_PROGRESS_STATUS;
     const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
@@ -349,6 +422,15 @@ export function normalizeUnderscoreEmphasis(markdown: string): string {
     }
     return `*${inner}*`;
   });
+}
+
+function extractUploadedFileId(response: SlackFilesUploadV2Response): string | undefined {
+  const fromFiles = response.files?.find((f) => f.id?.trim())?.id;
+  if (fromFiles) {
+    return fromFiles;
+  }
+  const fromFile = response.file?.id?.trim();
+  return fromFile || undefined;
 }
 
 function formatToolHistorySummary(toolHistory?: Map<string, number>): string | undefined {

@@ -1,10 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-import type {
-  AgentExecutionRequest,
-  AgentExecutionSink,
-  AgentExecutor,
-} from '~/agent/types.js';
+import type { AgentExecutionRequest, AgentExecutionSink, AgentExecutor } from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
@@ -13,7 +9,8 @@ import type { MemoryStore } from '~/memory/types.js';
 
 import { createAnthropicAgentSdkMcpServer } from './mcp-server.js';
 import { handleClaudeSdkMessage } from './messages.js';
-import { buildPrompt, buildSystemPrompt } from './prompts.js';
+import { buildClaudePromptInput } from './multimodal-prompt.js';
+import { buildSystemPrompt } from './prompts.js';
 import { buildRuntimeUiState, createRuntimeUiStateTracker } from './runtime-ui.js';
 import type { MessageHandlers, RuntimeUiStateTracker } from './types.js';
 
@@ -55,7 +52,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       request,
       sink,
     );
-    const prompt = buildPrompt(request);
+    const prompt = buildClaudePromptInput(request);
 
     this.logger.info(
       'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s, cwd=%s)',
@@ -102,16 +99,21 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     }
 
     let sessionId: string | undefined;
+    let sessionCwd: string | undefined;
     const runtimeUi = createRuntimeUiStateTracker();
     const collectedAssistantTexts: string[] = [];
     const handlers: MessageHandlers = {
       collectAssistantText: (text) => {
         collectedAssistantTexts.push(text);
       },
+      getSessionCwd: () => sessionCwd,
       publishUiState: async () => {
         await this.publishRuntimeUiState(request.threadTs, sink, runtimeUi);
       },
       runtimeUi,
+      setSessionCwd: (cwd) => {
+        sessionCwd = cwd;
+      },
       setSessionId: (id) => {
         sessionId = id;
       },
