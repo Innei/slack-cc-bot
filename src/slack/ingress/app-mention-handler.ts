@@ -35,7 +35,15 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
-    const mention = SlackAppMentionEventSchema.parse(args.event);
+    const parsed = SlackAppMentionEventSchema.safeParse(args.event);
+    if (!parsed.success) {
+      deps.logger.error(
+        'Failed to parse app_mention event: %s',
+        parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
+      );
+      return;
+    }
+    const mention = parsed.data;
     await handleThreadConversation(args.client as SlackWebClientLike, mention, deps, {
       logLabel: 'app mention',
       addAcknowledgementReaction: true,
