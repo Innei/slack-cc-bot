@@ -26,8 +26,16 @@ export interface SlackIngressDependencies {
   workspaceResolver: WorkspaceResolver;
 }
 
+export interface ThreadConversationMessageFile {
+  id: string;
+  mimetype?: string | null | undefined;
+  name?: string | null | undefined;
+  url_private?: string | null | undefined;
+}
+
 export interface ThreadConversationMessage {
   channel: string;
+  files?: ThreadConversationMessageFile[] | undefined;
   team?: string | undefined;
   text: string;
   thread_ts?: string | undefined;
