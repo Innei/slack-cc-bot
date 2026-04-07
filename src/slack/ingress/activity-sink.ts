@@ -14,7 +14,7 @@ import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
-import type { SlackRenderer } from '../render/slack-renderer.js';
+import type { SlackRenderer, TrackedTask } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
 export interface ActivitySinkOptions {
@@ -76,6 +76,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     | undefined;
   let hasSentToolbarInTurn = false;
   let sessionUsageInfo: SessionUsageInfo | undefined;
+  const activeTasks = new Map<string, TrackedTask>();
+  /** Task IDs that reached a terminal state; cleaned up on next activity-state. */
+  const terminalTaskIds = new Set<string>();
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -105,6 +108,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     ...(state.activities != null ? { loadingMessages: state.activities } : {}),
     ...(state.composing != null ? { composing: state.composing } : {}),
     ...(toolHistory.size > 0 ? { toolHistory } : {}),
+    ...(activeTasks.size > 0 ? { tasks: new Map(activeTasks) } : {}),
     clear: state.clear ?? false,
   });
 
@@ -181,6 +185,8 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
     lastStateKey = undefined;
     toolHistory.clear();
+    activeTasks.clear();
+    terminalTaskIds.clear();
     previousActivities = new Set<string>();
     await renderer.clearUiState(client, channel, threadTs).catch((error) => {
       logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
@@ -188,8 +194,11 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   };
 
   const handleActivityState = async (state: AgentActivityState): Promise<void> => {
+    // Prune tasks that completed in a previous cycle so they show briefly before disappearing
+    pruneTerminalTasks();
+
     const nextStateKey = JSON.stringify(state);
-    if (nextStateKey === lastStateKey) return;
+    if (nextStateKey === lastStateKey && activeTasks.size === 0) return;
     lastStateKey = nextStateKey;
 
     if (!state.clear) {
@@ -242,6 +251,42 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
 
     await updateInFlightIndicator(state);
+  };
+
+  const handleTaskUpdate = async (
+    event: Extract<AgentExecutionEvent, { type: 'task-update' }>,
+  ): Promise<void> => {
+    const isTerminal = event.status === 'complete' || event.status === 'error';
+
+    activeTasks.set(event.taskId, {
+      title: event.title,
+      status: event.status,
+      ...(event.details ? { details: event.details } : {}),
+    });
+
+    if (isTerminal) {
+      terminalTaskIds.add(event.taskId);
+    }
+
+    // If progress message is already active, push an immediate update
+    if (progressMessageActive) {
+      const state: AgentActivityState = { threadTs, clear: false };
+      progressMessageTs = await renderer.upsertThreadProgressMessage(
+        client,
+        channel,
+        threadTs,
+        toRendererState(state),
+        progressMessageTs,
+      );
+    }
+  };
+
+  /** Remove tasks that reached a terminal state on the previous cycle. */
+  const pruneTerminalTasks = (): void => {
+    for (const taskId of terminalTaskIds) {
+      activeTasks.delete(taskId);
+    }
+    terminalTaskIds.clear();
   };
 
   const handleLifecycleEvent = async (
@@ -373,7 +418,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         await handleActivityState(event.state);
         return;
       }
-      if (event.type === 'task-update') return;
+      if (event.type === 'task-update') {
+        await handleTaskUpdate(event);
+        return;
+      }
       if (event.type === 'usage-info') {
         sessionUsageInfo = event.usage;
         return;
