@@ -29,7 +29,7 @@ describe('Claude skill permission bridge', () => {
     const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
     const skillOptions = (
       executor as unknown as {
-        buildSkillOptions: (sink: Record<string, unknown>) => {
+        buildToolOptions: (sink: Record<string, unknown>) => {
           canUseTool?: (
             toolName: string,
             input: Record<string, unknown>,
@@ -39,17 +39,25 @@ describe('Claude skill permission bridge', () => {
           ) => Promise<Record<string, unknown>>;
         };
       }
-    ).buildSkillOptions({});
+    ).buildToolOptions({});
 
     await expect(
-      skillOptions.canUseTool?.('Skill', { command: 'bazi' }, { signal: new AbortController().signal }),
+      skillOptions.canUseTool?.(
+        'Skill',
+        { command: 'bazi' },
+        { signal: new AbortController().signal },
+      ),
     ).resolves.toMatchObject({
       behavior: 'allow',
       updatedInput: { command: 'bazi' },
     });
 
     await expect(
-      skillOptions.canUseTool?.('Bash', { command: 'pwd' }, { signal: new AbortController().signal }),
+      skillOptions.canUseTool?.(
+        'Bash',
+        { command: 'pwd' },
+        { signal: new AbortController().signal },
+      ),
     ).resolves.toMatchObject({
       behavior: 'deny',
     });
