@@ -18,7 +18,7 @@ import type {
   SDKToolProgressMessage,
 } from '@anthropic-ai/claude-agent-sdk';
 
-import type { GeneratedOutputFile } from '~/agent/types.js';
+import type { GeneratedOutputFile, ModelUsageInfo, SessionUsageInfo } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 
@@ -84,7 +84,7 @@ export async function handleClaudeSdkMessage(
       clearSystemStatus(handlers.runtimeUi, 'hook');
       clearSystemStatus(handlers.runtimeUi, 'retry');
       clearSystemStatus(handlers.runtimeUi, 'compacting');
-      handleResult(logger, message as SDKResultMessage);
+      await handleResult(logger, message as SDKResultMessage, sink);
       break;
     }
 
@@ -201,7 +201,7 @@ function handleSystemInit(
   handlers.setSessionId(message.session_id);
   handlers.setSessionCwd(message.cwd);
   logger.info(
-    'Claude Code session init: id=%s model=%s cwd=%s',
+    'Claude Code effective session model resolved: id=%s model=%s cwd=%s',
     message.session_id,
     message.model,
     message.cwd,
@@ -412,7 +412,11 @@ async function handleToolProgressMessage(
   await handlers.publishUiState();
 }
 
-function handleResult(logger: AppLogger, message: SDKResultMessage): void {
+async function handleResult(
+  logger: AppLogger,
+  message: SDKResultMessage,
+  sink: AgentExecutionSink,
+): Promise<void> {
   if (message.subtype === 'success') {
     logger.info(
       'Claude execution completed in %dms, cost $%s',
@@ -424,6 +428,11 @@ function handleResult(logger: AppLogger, message: SDKResultMessage): void {
   }
 
   logModelUsage(logger, message);
+
+  const usageInfo = buildUsageInfo(message);
+  if (usageInfo) {
+    await sink.onEvent({ type: 'usage-info', usage: usageInfo });
+  }
 }
 
 function logModelUsage(logger: AppLogger, message: SDKResultMessage): void {
@@ -448,6 +457,35 @@ function logModelUsage(logger: AppLogger, message: SDKResultMessage): void {
       usage.costUSD.toFixed(4),
     );
   }
+}
+
+function buildUsageInfo(message: SDKResultMessage): SessionUsageInfo | undefined {
+  if (!message.modelUsage) return undefined;
+
+  const modelUsage: ModelUsageInfo[] = [];
+
+  for (const [model, usage] of Object.entries(message.modelUsage)) {
+    const cacheRead = usage.cacheReadInputTokens;
+    const totalInput = usage.inputTokens;
+    const cacheHitRate =
+      totalInput + cacheRead > 0 ? (cacheRead / (totalInput + cacheRead)) * 100 : 0;
+
+    modelUsage.push({
+      model,
+      inputTokens: totalInput,
+      outputTokens: usage.outputTokens,
+      cacheReadInputTokens: cacheRead,
+      cacheCreationInputTokens: usage.cacheCreationInputTokens,
+      cacheHitRate,
+      costUSD: usage.costUSD,
+    });
+  }
+
+  return {
+    totalCostUSD: message.total_cost_usd,
+    durationMs: message.duration_ms,
+    modelUsage,
+  };
 }
 
 function extractAssistantText(message: SDKAssistantMessage): string {

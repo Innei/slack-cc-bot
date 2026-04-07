@@ -3,6 +3,7 @@ import type {
   AgentExecutionEvent,
   GeneratedImageFile,
   GeneratedOutputFile,
+  SessionUsageInfo,
 } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
@@ -48,6 +49,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     | Extract<AgentExecutionEvent, { type: 'lifecycle'; phase: 'stopped' }>['reason']
     | undefined;
   let hasSentToolbarInTurn = false;
+  let sessionUsageInfo: SessionUsageInfo | undefined;
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
@@ -280,6 +282,10 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         return;
       }
       if (event.type === 'task-update') return;
+      if (event.type === 'usage-info') {
+        sessionUsageInfo = event.usage;
+        return;
+      }
       await handleLifecycleEvent(event as Extract<AgentExecutionEvent, { type: 'lifecycle' }>);
     },
 
@@ -347,6 +353,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               logger.warn('Failed to finalize progress message: %s', String(err));
             });
         }
+      }
+      // Post session usage info as the final context block
+      if (executionCompletedSuccessfully && sessionUsageInfo) {
+        await renderer
+          .postSessionUsageInfo(client, channel, threadTs, sessionUsageInfo)
+          .catch((err) => {
+            logger.warn('Failed to post session usage info: %s', String(err));
+          });
       }
     },
   };

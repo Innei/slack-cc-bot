@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 
 import { markdownToBlocks, splitBlocksWithText } from 'markdown-to-slack-blocks';
 
-import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
+import type { GeneratedImageFile, GeneratedOutputFile, SessionUsageInfo } from '~/agent/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 
@@ -392,6 +392,28 @@ export class SlackRenderer {
     return failed;
   }
 
+  async postSessionUsageInfo(
+    client: SlackWebClientLike,
+    channelId: string,
+    threadTs: string,
+    usage: SessionUsageInfo,
+  ): Promise<void> {
+    const usageText = formatSessionUsageInfo(usage);
+    if (!usageText) return;
+
+    await client.chat.postMessage({
+      channel: channelId,
+      thread_ts: threadTs,
+      text: usageText,
+      blocks: [
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: usageText }],
+        },
+      ],
+    });
+  }
+
   private buildProgressMessageText(state: RendererUiState): string {
     const status = (state.status ?? '').trim() || DEFAULT_PROGRESS_STATUS;
     const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
@@ -532,4 +554,42 @@ function formatToolHistorySummary(toolHistory?: Map<string, number>): string | u
   }
 
   return items.join('  \u00B7  ');
+}
+
+function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
+  if (!usage.modelUsage || usage.modelUsage.length === 0) {
+    return undefined;
+  }
+
+  const parts: string[] = [];
+
+  // Format duration
+  const durationSec = (usage.durationMs / 1000).toFixed(1);
+  parts.push(`${durationSec}s`);
+
+  // Format total cost
+  parts.push(`$${usage.totalCostUSD.toFixed(4)}`);
+
+  // Format model usage details
+  for (const model of usage.modelUsage) {
+    const modelName = model.model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
+    const nonCachedInputAndOutputTokens = model.inputTokens + model.outputTokens;
+    const cacheHitPct = model.cacheHitRate.toFixed(0);
+
+    parts.push(
+      `${modelName}: ${formatTokenCount(nonCachedInputAndOutputTokens)} non-cached in + out (${cacheHitPct}% cache)`,
+    );
+  }
+
+  return parts.join('  \u00B7  ');
+}
+
+function formatTokenCount(count: number): string {
+  if (count >= 1_000_000) {
+    return `${(count / 1_000_000).toFixed(1)}M`;
+  }
+  if (count >= 1_000) {
+    return `${(count / 1_000).toFixed(1)}k`;
+  }
+  return String(count);
 }

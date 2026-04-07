@@ -1,3 +1,6 @@
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
@@ -23,6 +26,37 @@ function createAbortError(): Error {
 
 function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
+}
+
+const execFileAsync = promisify(execFile);
+
+interface ClaudeAuthStatus {
+  apiProvider?: string;
+  authMethod?: string;
+  email?: string;
+  loggedIn?: boolean;
+  orgName?: string;
+  subscriptionType?: string;
+}
+
+interface ClaudeRuntimeConfigSummary {
+  anthropicBaseUrl: string | undefined;
+  anthropicDefaultHaikuModel: string | undefined;
+  anthropicDefaultOpusModel: string | undefined;
+  anthropicDefaultSonnetModel: string | undefined;
+  anthropicModel: string | undefined;
+  claudeModel: string | undefined;
+}
+
+function getClaudeRuntimeConfigSummary(): ClaudeRuntimeConfigSummary {
+  return {
+    anthropicBaseUrl: process.env.ANTHROPIC_BASE_URL?.trim() || undefined,
+    anthropicDefaultHaikuModel: process.env.ANTHROPIC_DEFAULT_HAIKU_MODEL?.trim() || undefined,
+    anthropicDefaultOpusModel: process.env.ANTHROPIC_DEFAULT_OPUS_MODEL?.trim() || undefined,
+    anthropicDefaultSonnetModel: process.env.ANTHROPIC_DEFAULT_SONNET_MODEL?.trim() || undefined,
+    anthropicModel: process.env.ANTHROPIC_MODEL?.trim() || undefined,
+    claudeModel: env.CLAUDE_MODEL,
+  };
 }
 
 async function nextMessageOrAbort<T>(
@@ -78,7 +112,10 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     private readonly logger: AppLogger,
     private readonly memoryStore: MemoryStore,
     private readonly executionProbe?: ClaudeExecutionProbe,
-  ) {}
+  ) {
+    void this.logClaudeAuthStatus();
+    this.logClaudeRuntimeConfig();
+  }
 
   async drain(): Promise<void> {
     if (this.activeExecutions.size > 0) {
@@ -300,6 +337,41 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         threadTs: request.threadTs,
       });
     }
+  }
+
+  private async logClaudeAuthStatus(): Promise<void> {
+    try {
+      const { stdout } = await execFileAsync('claude', ['auth', 'status', '--json'], {
+        env: process.env,
+        timeout: 5_000,
+      });
+      const status = JSON.parse(stdout) as ClaudeAuthStatus;
+      this.logger.info(
+        'Claude Code auth status at executor startup: loggedIn=%s authMethod=%s apiProvider=%s subscriptionType=%s email=%s orgName=%s',
+        status.loggedIn === true ? 'true' : 'false',
+        status.authMethod ?? '(unknown)',
+        status.apiProvider ?? '(unknown)',
+        status.subscriptionType ?? '(unknown)',
+        status.email ?? '(unknown)',
+        status.orgName ?? '(unknown)',
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.warn('Failed to query Claude Code auth status at executor startup: %s', message);
+    }
+  }
+
+  private logClaudeRuntimeConfig(): void {
+    const config = getClaudeRuntimeConfigSummary();
+    this.logger.info(
+      'Claude Code runtime config at executor startup: CLAUDE_MODEL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_BASE_URL=%s',
+      config.claudeModel ?? '(unset)',
+      config.anthropicModel ?? '(unset)',
+      config.anthropicDefaultSonnetModel ?? '(unset)',
+      config.anthropicDefaultHaikuModel ?? '(unset)',
+      config.anthropicDefaultOpusModel ?? '(unset)',
+      config.anthropicBaseUrl ?? '(unset)',
+    );
   }
 
   private describeUnknownError(error: unknown): string {

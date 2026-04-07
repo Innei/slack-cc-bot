@@ -13,6 +13,7 @@ function createTestDeps() {
       withTag: vi.fn().mockReturnThis(),
     } as any,
     threadExecutionRegistry: {
+      claimMessage: vi.fn(() => true),
       listActive: vi.fn(() => []),
       register: vi.fn(() => () => {}),
       stopAll: vi.fn(async () => ({ stopped: 0, failed: 0 })),

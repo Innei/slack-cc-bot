@@ -166,6 +166,7 @@ function createMemoryStore(initial: MemoryRecord[] = []): MemoryStore {
 
 function createMockThreadExecutionRegistry(): ThreadExecutionRegistry {
   return {
+    claimMessage: vi.fn(() => true),
     listActive: vi.fn(() => []),
     register: vi.fn(() => () => {}),
     stopAll: vi.fn(async () => ({ stopped: 0, failed: 0 })),
@@ -456,6 +457,8 @@ describe('handleVersionCommand', () => {
     // Deploy date should be a valid ISO string
     const deployMatch = result.text.match(/Deploy Date:\*\s+(.+)/);
     expect(deployMatch).toBeTruthy();
-    expect(new Date(deployMatch![1]).getTime()).not.toBeNaN();
+    const deployDate = deployMatch?.[1];
+    expect(deployDate).toBeTruthy();
+    expect(new Date(deployDate!).getTime()).not.toBeNaN();
   });
 });

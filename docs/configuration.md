@@ -23,9 +23,9 @@ cp .env.example .env
 | `SLACK_CONFIG_REFRESH_TOKEN` | Configuration refresh token (`xoxe-...`) for automatic rotation |
 | `SLACK_CONFIG_TOKEN`         | Configuration access token (fallback, expires every 12h)        |
 
-See [`.env.example`](../.env.example) for all available options including `REPO_SCAN_DEPTH`, `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, and logging configuration.
+See [`.env.example`](../.env.example) for all available options including `REPO_SCAN_DEPTH`, `CLAUDE_MODEL`, `CLAUDE_MAX_TURNS`, `ANTHROPIC_BASE_URL`, and logging configuration.
 
-This repository does not require an `ANTHROPIC_API_KEY` environment variable to boot. Claude authentication follows your local Claude Agent SDK / runtime setup.
+This repository does not require an `ANTHROPIC_API_KEY` environment variable to boot. Claude authentication follows your local Claude Agent SDK / runtime setup. If you want to route Claude Code through a compatible backend such as Kimi, put the corresponding `ANTHROPIC_*` variables in `.env`; live E2E can override the same keys in `.env.e2e`.
 
 The bot scans `REPO_ROOT_DIR` recursively up to `REPO_SCAN_DEPTH`. When it can resolve a repo/path from the conversation, it binds the Slack thread to that concrete workspace path. When no repo is identified, it proceeds without a workspace instead of falling back to the bot process `cwd`.
 

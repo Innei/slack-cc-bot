@@ -24,6 +24,22 @@ export interface AgentExecutionRequest {
   workspaceRepoId?: string;
 }
 
+export interface ModelUsageInfo {
+  cacheCreationInputTokens: number;
+  cacheHitRate: number;
+  cacheReadInputTokens: number;
+  costUSD: number;
+  inputTokens: number;
+  model: string;
+  outputTokens: number;
+}
+
+export interface SessionUsageInfo {
+  durationMs: number;
+  modelUsage: ModelUsageInfo[];
+  totalCostUSD: number;
+}
+
 export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
@@ -70,6 +86,10 @@ export type AgentExecutionEvent =
   | {
       type: 'generated-files';
       files: GeneratedOutputFile[];
+    }
+  | {
+      type: 'usage-info';
+      usage: SessionUsageInfo;
     };
 
 export interface AgentActivityState {

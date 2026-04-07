@@ -18,7 +18,9 @@ function baseExecution(
     providerId: 'claude',
     startedAt: '2026-04-06T00:00:00.000Z',
     stop: partial.stop ?? vi.fn().mockResolvedValue(undefined),
-    ...partial,
+    ...(partial.completionPromise ? { completionPromise: partial.completionPromise } : {}),
+    executionId: partial.executionId,
+    threadTs: partial.threadTs,
   };
 }
 

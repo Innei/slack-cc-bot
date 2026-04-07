@@ -38,9 +38,23 @@ function createMockMemoryStore(count = 0): MemoryStore {
     countAll: () => count,
     delete: () => false,
     deleteAll: () => 0,
+    listForContext: () => ({ global: [], preferences: [], workspace: [] }),
     listRecent: () => [],
+    prune: () => 0,
     pruneAll: () => 0,
-    upsert: () => ({ id: '1', content: '', createdAt: '', updatedAt: '' }),
+    save: (input) => ({
+      ...input,
+      id: '1',
+      createdAt: '',
+      scope: input.repoId ? 'workspace' : 'global',
+    }),
+    saveWithDedup: (input) => ({
+      ...input,
+      id: '1',
+      createdAt: '',
+      scope: input.repoId ? 'workspace' : 'global',
+    }),
+    search: () => [],
   };
 }
 
@@ -71,7 +85,11 @@ describe('Home Tab Handler', () => {
     await handler({ client, event: { user: 'U123', tab: 'home' } });
 
     expect(client.views.publish).toHaveBeenCalledOnce();
-    const call = client.views.publish.mock.calls[0][0];
+    const publishCall = client.views.publish.mock.calls[0];
+    if (!publishCall) {
+      throw new Error('Expected publish to be called');
+    }
+    const call = publishCall[0];
     expect(call.user_id).toBe('U123');
     expect(call.view.type).toBe('home');
     expect(call.view.blocks.length).toBeGreaterThan(0);
@@ -112,9 +130,16 @@ describe('Home Tab Handler', () => {
     const client = createMockClient();
     await handler({ client, event: { user: 'U456', tab: 'home' } });
 
-    const view = client.views.publish.mock.calls[0][0].view;
+    const publishCall = client.views.publish.mock.calls[0];
+    if (!publishCall) {
+      throw new Error('Expected publish to be called');
+    }
+    const view = publishCall[0].view;
     const statsBlock = view.blocks.find((b: any) => b.type === 'section' && b.fields);
     expect(statsBlock).toBeDefined();
+    if (!statsBlock) {
+      throw new Error('Expected stats block');
+    }
 
     const fieldTexts = statsBlock.fields.map((f: any) => f.text);
     expect(fieldTexts).toContainEqual(expect.stringContaining('7'));
