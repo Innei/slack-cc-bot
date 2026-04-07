@@ -28,11 +28,6 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
       const memoryCount = deps.memoryStore.countAll();
       const repos = deps.workspaceResolver.listRepos();
 
-      const repoLines =
-        repos.length > 0
-          ? repos.map((r) => `\`${r.label ?? r.name}\``).join(', ')
-          : '_No repositories configured_';
-
       await client.views.publish({
         user_id: userId,
         view: {
@@ -40,35 +35,35 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
           blocks: [
             {
               type: 'header',
-              text: { type: 'plain_text', text: 'AI Assistant', emoji: true },
+              text: { type: 'plain_text', text: '🤖 Code Assistant', emoji: true },
             },
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
-                text: 'Your AI coding assistant in Slack. Mention me in a channel, or start a chat from the *Chat* tab.',
+                text: 'Your AI-powered coding companion in Slack. Mention me, start a thread, or use the Messages tab to get started.',
               },
             },
             { type: 'divider' },
             {
               type: 'header',
-              text: { type: 'plain_text', text: 'Quick Start', emoji: true },
+              text: { type: 'plain_text', text: '⚡ Getting Started', emoji: true },
             },
             {
               type: 'section',
               text: {
                 type: 'mrkdwn',
                 text: [
-                  '*Chat* \u2014 Click the *Chat* tab above to start a conversation',
-                  `*Mention* \u2014 ${botMention} in any channel to ask a question`,
-                  '*Thread* \u2014 Reply in an existing thread to continue the conversation',
+                  '💬 *Chat* — Click the *Messages* tab above to start a conversation',
+                  `📌 *Mention* — Type ${botMention} in any channel to ask a question`,
+                  '🧵 *Thread* — Reply in an existing thread to continue the conversation',
                 ].join('\n'),
               },
             },
             { type: 'divider' },
             {
               type: 'header',
-              text: { type: 'plain_text', text: 'Stats', emoji: true },
+              text: { type: 'plain_text', text: '📊 Overview', emoji: true },
             },
             {
               type: 'section',
@@ -80,20 +75,11 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
             },
             { type: 'divider' },
             {
-              type: 'header',
-              text: { type: 'plain_text', text: 'Repositories', emoji: true },
-            },
-            {
-              type: 'section',
-              text: { type: 'mrkdwn', text: repoLines },
-            },
-            { type: 'divider' },
-            {
               type: 'context',
               elements: [
                 {
                   type: 'mrkdwn',
-                  text: 'Use `/usage` for detailed stats \u2022 `/workspace` to manage repos \u2022 `/memory` to manage memories',
+                  text: '`/usage` detailed stats  ·  `/workspace` manage repos  ·  `/memory` manage memories',
                 },
               ],
             },

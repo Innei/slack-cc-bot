@@ -101,7 +101,7 @@ Create a new Slack app at <https://api.slack.com/apps> -> **From a manifest**, t
   },
   "settings": {
     "event_subscriptions": {
-      "bot_events": ["app_mention", "message.channels", "message.im"]
+      "bot_events": ["app_home_opened", "app_mention", "message.channels", "message.im"]
     },
     "interactivity": {
       "is_enabled": true
@@ -116,6 +116,16 @@ Create a new Slack app at <https://api.slack.com/apps> -> **From a manifest**, t
 </details>
 
 After creation, grab the **Bot Token** (`xoxb-...`), **App-Level Token** (`xapp-...`, with `connections:write`), and **Signing Secret** from the app settings page.
+
+### Home Tab setup
+
+The Home Tab displays a welcome screen with quick-start instructions and usage stats. It requires:
+
+1. **`app_home_opened` event** — Subscribe to this event under **Event Subscriptions** → **Bot Events** in the Slack app settings. It is already included in the manifest above.
+2. **Home Tab enabled** — In **App Home** settings, ensure the **Home Tab** checkbox is checked.
+3. **`home_tab_enabled: true`** in the manifest's `features.app_home` section (included above).
+
+If you set `SLACK_APP_ID` + `SLACK_CONFIG_REFRESH_TOKEN`, the bot will automatically ensure both `home_tab_enabled` and the `app_home_opened` event subscription are present on startup via manifest sync.
 
 ## Automatic manifest sync
 
