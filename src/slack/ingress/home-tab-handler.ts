@@ -2,9 +2,12 @@ import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionStore } from '~/session/types.js';
+import { formatUptime } from '~/util/format.js';
+import { resolveGitHash } from '~/util/version.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
 import type { SlackWebClientLike } from '../types.js';
+import { resolveUserName } from '../user-profile.js';
 
 export const HOME_TAB_REFRESH_ACTION_ID = 'home_tab_refresh';
 
@@ -16,42 +19,6 @@ export interface HomeTabDependencies {
   providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   workspaceResolver: WorkspaceResolver;
-}
-
-interface SlackUserProfile {
-  display_name?: string;
-  real_name?: string;
-}
-
-function formatUptime(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-  const days = Math.floor(hours / 24);
-
-  if (days > 0) {
-    return `${days}d ${hours % 24}h ${minutes % 60}m`;
-  }
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  }
-  return `${seconds}s`;
-}
-
-function resolveGitHash(): string {
-  try {
-    return (globalThis as any).__GIT_HASH__ || 'dev';
-  } catch {
-    return 'dev';
-  }
-}
-
-function resolveUserName(profile: SlackUserProfile | undefined): string | undefined {
-  if (!profile) return undefined;
-  return profile.display_name || profile.real_name || undefined;
 }
 
 export function createHomeTabHandler(deps: HomeTabDependencies) {
