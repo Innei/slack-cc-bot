@@ -181,6 +181,54 @@ describe('createActivitySink', () => {
 
     expect(sink.toolHistory.get('Reading')).toBe(2);
   });
+
+  it('counts repeated tool calls when activity reappears after disappearing', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    // First tool call: Reading file.txt
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        activities: ['Reading file.txt...'],
+        clear: false,
+      },
+    });
+    expect(sink.toolHistory.get('Reading')).toBe(1);
+
+    // Transition to different activity (first read completes)
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        activities: ['Editing file.txt...'],
+        clear: false,
+      },
+    });
+    expect(sink.toolHistory.get('Editing')).toBe(1);
+
+    // Second tool call: Reading file.txt again (same activity string reappears)
+    await sink.onEvent({
+      type: 'activity-state',
+      state: {
+        threadTs: 'ts1',
+        activities: ['Editing file.txt...', 'Reading file.txt...'],
+        clear: false,
+      },
+    });
+    // Should count the reappearing Reading activity
+    expect(sink.toolHistory.get('Reading')).toBe(2);
+    expect(sink.toolHistory.get('Editing')).toBe(1);
+  });
+
   it('buffers generated-images and flushes via postGeneratedImages after assistant text reply', async () => {
     const renderer = createRendererStub();
     const postGeneratedImages = vi.mocked(renderer.postGeneratedImages);

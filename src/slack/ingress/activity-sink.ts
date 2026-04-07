@@ -39,7 +39,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   let progressMessageActive = false;
   let terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
   const toolHistory = new Map<string, number>();
-  const seenActivities = new Set<string>();
+  let previousActivities = new Set<string>();
   let lastStateKey: string | undefined;
   let pendingGeneratedFiles: GeneratedOutputFile[] = [];
   let pendingGeneratedImages: GeneratedImageFile[] = [];
@@ -153,7 +153,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     }
     lastStateKey = undefined;
     toolHistory.clear();
-    seenActivities.clear();
+    previousActivities = new Set<string>();
     await renderer.clearUiState(client, channel, threadTs).catch((error) => {
       logger.warn('Failed to clear UI state after assistant reply: %s', String(error));
     });
@@ -165,7 +165,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     lastStateKey = nextStateKey;
 
     if (!state.clear) {
-      collectToolActivity(state, toolHistory, seenActivities);
+      previousActivities = collectToolActivity(state, toolHistory, previousActivities);
     }
 
     if (state.composing && !state.clear) {
@@ -368,19 +368,28 @@ function createDefaultThinkingState(threadTs: string): AgentActivityState {
 function collectToolActivity(
   state: AgentActivityState,
   history: Map<string, number>,
-  seenActivities: Set<string>,
-): void {
+  previousActivities: Set<string>,
+): Set<string> {
   const candidates = [...(state.activities ?? [])];
   if (state.status?.trim()) candidates.push(state.status);
 
+  const currentActivities = new Set<string>();
+
   for (const msg of candidates) {
     const trimmed = msg.trim();
-    if (!trimmed || seenActivities.has(trimmed)) continue;
+    if (!trimmed || currentActivities.has(trimmed)) continue;
+    currentActivities.add(trimmed);
+
+    // Only count activities that are newly appearing (not in previous state)
+    if (previousActivities.has(trimmed)) continue;
+
     const match = trimmed.match(TOOL_VERB_PATTERN);
     if (!match) continue;
-    seenActivities.add(trimmed);
+
     const verb = match[1]!;
     const label = verb === 'Using' ? (match[2]!.split(/\s/)[0] ?? verb) : verb;
     history.set(label, (history.get(label) ?? 0) + 1);
   }
+
+  return currentActivities;
 }
