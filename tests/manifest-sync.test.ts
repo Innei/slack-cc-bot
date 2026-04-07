@@ -126,6 +126,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            app_home: { home_tab_enabled: true },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'test' },
@@ -143,6 +144,9 @@ describe('syncSlashCommands with token rotation', () => {
                 description: 'test',
               },
             ],
+          },
+          settings: {
+            event_subscriptions: { bot_events: ['app_home_opened'] },
           },
         },
       }),
@@ -189,6 +193,7 @@ describe('syncSlashCommands with token rotation', () => {
         slackOk({
           manifest: {
             features: {
+              app_home: { home_tab_enabled: true },
               bot_user: { display_name: 'cc-001', always_online: true },
               slash_commands: [
                 { command: '/usage', description: 'test' },
@@ -206,6 +211,9 @@ describe('syncSlashCommands with token rotation', () => {
                   description: 'test',
                 },
               ],
+            },
+            settings: {
+              event_subscriptions: { bot_events: ['app_home_opened'] },
             },
           },
         }),
@@ -349,7 +357,7 @@ describe('syncSlashCommands with token rotation', () => {
     expect(body.manifest.features.bot_user.always_online).toBe(true);
   });
 
-  it('skips update when all commands exist and always_online is true', async () => {
+  it('skips update when all commands exist and always_online and home_tab are enabled', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-noop-'));
     const tokenStorePath = path.join(tmpDir, 'tokens.json');
 
@@ -357,6 +365,7 @@ describe('syncSlashCommands with token rotation', () => {
       slackOk({
         manifest: {
           features: {
+            app_home: { home_tab_enabled: true },
             bot_user: { display_name: 'cc-001', always_online: true },
             slash_commands: [
               { command: '/usage', description: 'x' },
@@ -374,6 +383,9 @@ describe('syncSlashCommands with token rotation', () => {
                 description: 'x',
               },
             ],
+          },
+          settings: {
+            event_subscriptions: { bot_events: ['app_home_opened'] },
           },
         },
       }),

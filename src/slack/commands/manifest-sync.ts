@@ -24,12 +24,28 @@ interface SlackManifestBotUser {
   display_name?: string;
 }
 
+interface SlackManifestAppHome {
+  home_tab_enabled?: boolean;
+  messages_tab_enabled?: boolean;
+  messages_tab_read_only_enabled?: boolean;
+}
+
+interface SlackManifestEventSubscriptions {
+  [key: string]: unknown;
+  bot_events?: string[];
+}
+
 interface SlackManifest {
   [key: string]: unknown;
   features?: {
+    app_home?: SlackManifestAppHome;
     bot_user?: SlackManifestBotUser;
     shortcuts?: SlackManifestShortcut[];
     slash_commands?: SlackManifestSlashCommand[];
+    [key: string]: unknown;
+  };
+  settings?: {
+    event_subscriptions?: SlackManifestEventSubscriptions;
     [key: string]: unknown;
   };
 }
@@ -138,6 +154,14 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const botUser = currentManifest.features?.bot_user;
   const needsAlwaysOnline = !botUser?.always_online;
 
+  // Ensure home tab is enabled (required for Home tab to render)
+  const appHome = currentManifest.features?.app_home;
+  const needsHomeTab = !appHome?.home_tab_enabled;
+
+  // Ensure app_home_opened event is subscribed
+  const existingBotEvents = currentManifest.settings?.event_subscriptions?.bot_events ?? [];
+  const needsHomeEvent = !existingBotEvents.includes('app_home_opened');
+
   // Remove /stop if still present in manifest (replaced by reaction + shortcut)
   const commandsToKeep = (
     missingCommands.length > 0 ? [...existingCommands, ...missingCommands] : existingCommands
@@ -145,9 +169,15 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const commandsChanged =
     missingCommands.length > 0 || commandsToKeep.length !== existingCommands.length;
 
-  if (!commandsChanged && missingShortcuts.length === 0 && !needsAlwaysOnline) {
+  if (
+    !commandsChanged &&
+    missingShortcuts.length === 0 &&
+    !needsAlwaysOnline &&
+    !needsHomeTab &&
+    !needsHomeEvent
+  ) {
     logger.info(
-      'All %d slash commands and %d shortcuts already registered, bot always_online is enabled',
+      'All %d slash commands and %d shortcuts already registered, bot always_online and home_tab are enabled',
       DESIRED_COMMANDS.length,
       DESIRED_SHORTCUTS.length,
     );
@@ -171,17 +201,39 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   if (needsAlwaysOnline) {
     logger.info('Enabling bot_user.always_online for Socket Mode presence');
   }
+  if (needsHomeTab) {
+    logger.info('Enabling app_home.home_tab_enabled for Home tab');
+  }
+  if (needsHomeEvent) {
+    logger.info('Adding app_home_opened to bot_events for Home tab updates');
+  }
+
+  // Build updated bot_events list if needed
+  const updatedBotEvents = needsHomeEvent
+    ? [...existingBotEvents, 'app_home_opened']
+    : existingBotEvents;
 
   const updatedManifest: SlackManifest = {
     ...currentManifest,
     features: {
       ...currentManifest.features,
+      app_home: {
+        ...currentManifest.features?.app_home,
+        home_tab_enabled: true,
+      },
       bot_user: {
         ...currentManifest.features?.bot_user,
         always_online: true,
       },
       slash_commands: commandsToKeep,
       shortcuts: [...existingShortcuts, ...missingShortcuts],
+    },
+    settings: {
+      ...currentManifest.settings,
+      event_subscriptions: {
+        ...currentManifest.settings?.event_subscriptions,
+        bot_events: updatedBotEvents,
+      },
     },
   };
 
