@@ -123,31 +123,27 @@ Expected: FAIL because `NormalizedThreadMessage` does not have `images`, `SlackM
 Update `src/schemas/slack/message.ts`:
 
 ```typescript
-const SlackFileSchema = z
-  .object({
-    id: z.string().min(1),
-    mimetype: z.string().min(1).optional(),
-    filetype: z.string().min(1).optional(),
-    name: z.string().min(1).optional(),
-    title: z.string().min(1).optional(),
-    url_private: z.string().url().optional(),
-  })
-  .passthrough();
+const SlackFileSchema = z.looseObject({
+  id: z.string().min(1),
+  mimetype: z.string().min(1).optional(),
+  filetype: z.string().min(1).optional(),
+  name: z.string().min(1).optional(),
+  title: z.string().min(1).optional(),
+  url_private: z.string().url().optional(),
+});
 
-export const SlackMessageSchema = z
-  .object({
-    channel: z.string().min(1).optional(),
-    team: z.string().min(1).optional(),
-    text: z.string().default(''),
-    ts: z.string().min(1),
-    thread_ts: z.string().min(1).optional(),
-    subtype: z.string().optional(),
-    user: z.string().optional(),
-    bot_id: z.string().optional(),
-    blocks: z.array(z.union([SlackSectionBlockSchema, SlackGenericBlockSchema])).optional(),
-    files: z.array(SlackFileSchema).optional(),
-  })
-  .passthrough();
+export const SlackMessageSchema = z.looseObject({
+  channel: z.string().min(1).optional(),
+  team: z.string().min(1).optional(),
+  text: z.string().default(''),
+  ts: z.string().min(1),
+  thread_ts: z.string().min(1).optional(),
+  subtype: z.string().optional(),
+  user: z.string().optional(),
+  bot_id: z.string().optional(),
+  blocks: z.array(z.union([SlackSectionBlockSchema, SlackGenericBlockSchema])).optional(),
+  files: z.array(SlackFileSchema).optional(),
+});
 ```
 
 Update `src/slack/context/message-normalizer.ts`:
