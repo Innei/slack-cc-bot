@@ -167,6 +167,109 @@ describe('thread reply ingress', () => {
       userId: 'U123',
     });
   });
+
+  it('processes thread replies with image attachments only (no text)', async () => {
+    const threadTs = '1712345678.000108';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs);
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '',
+        files: [
+          {
+            id: 'F123ABC',
+            mimetype: 'image/png',
+            name: 'screenshot.png',
+            url_private: 'https://files.slack.com/files-pri/T123-F123ABC/screenshot.png',
+          },
+        ],
+        thread_ts: threadTs,
+        ts: '1712345678.000109',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+  });
+
+  it('processes thread replies with text and image attachments', async () => {
+    const threadTs = '1712345678.000110';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs);
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: 'Here is the screenshot',
+        files: [
+          {
+            id: 'F123DEF',
+            mimetype: 'image/jpeg',
+            name: 'photo.jpg',
+            url_private: 'https://files.slack.com/files-pri/T123-F123DEF/photo.jpg',
+          },
+        ],
+        thread_ts: threadTs,
+        ts: '1712345678.000111',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(request).toMatchObject({
+      channelId: 'C123',
+      mentionText: 'Here is the screenshot',
+      threadTs,
+    });
+  });
+
+  it('processes app mentions with image attachments only', async () => {
+    const threadTs = '1712345678.000112';
+    const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
+
+    await appMentionHandler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '',
+        files: [
+          {
+            id: 'F123GHI',
+            mimetype: 'image/png',
+            name: 'diagram.png',
+            url_private: 'https://files.slack.com/files-pri/T123-F123GHI/diagram.png',
+          },
+        ],
+        ts: threadTs,
+        type: 'app_mention',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(request).toMatchObject({
+      channelId: 'C123',
+      threadTs,
+      userId: 'U123',
+    });
+  });
 });
 
 function createThreadReplyTestHarness(threadTs: string): {

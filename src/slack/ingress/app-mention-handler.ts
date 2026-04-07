@@ -41,6 +41,7 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
       args.client as SlackWebClientLike,
       {
         channel: mention.channel,
+        files: mention.files,
         team: mention.team,
         text: mention.text,
         thread_ts: mention.thread_ts,
@@ -116,6 +117,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       client,
       {
         channel: channelId,
+        files: message.files,
         team: teamId,
         text: message.text,
         thread_ts: threadTs,
@@ -180,14 +182,16 @@ export function createAssistantUserMessageHandler(
           ? message.user
           : undefined;
 
-    if (!threadTs || !channelId || !teamId || !userId || !message.text.trim()) {
+    const hasTextOrFiles = message.text.trim() || (message.files && message.files.length > 0);
+    if (!threadTs || !channelId || !teamId || !userId || !hasTextOrFiles) {
       runtimeError(
         deps.logger,
-        'Skipping assistant message without required identifiers (channel=%s thread=%s team=%s user=%s)',
+        'Skipping assistant message without required identifiers (channel=%s thread=%s team=%s user=%s hasContent=%s)',
         channelId ?? 'missing',
         threadTs ?? 'missing',
         teamId ?? 'missing',
         userId ?? 'missing',
+        String(hasTextOrFiles),
       );
       return;
     }
@@ -217,6 +221,7 @@ export function createAssistantUserMessageHandler(
       client,
       {
         channel: channelId,
+        files: message.files,
         team: teamId,
         text: message.text,
         thread_ts: threadTs,
