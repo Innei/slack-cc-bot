@@ -1,4 +1,4 @@
-import { resolve } from 'node:path';
+import path from 'node:path';
 
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
@@ -8,10 +8,16 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
-      '~': resolve(__dirname, 'src'),
+      '~': path.resolve(__dirname, 'src'),
     },
+  },
+  build: {
+    outDir: 'dist/client',
   },
   server: {
     port: 3100,
+    proxy: {
+      '/api': 'http://localhost:3101',
+    },
   },
 });

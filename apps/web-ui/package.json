@@ -4,12 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && tsdown",
     "dev": "vite",
+    "dev:server": "tsx watch src/server/index.ts",
     "preview": "vite preview",
-    "typecheck": "tsc -b"
+    "start": "node dist/server/index.js",
+    "typecheck": "tsc -b && tsc -p tsconfig.server.json --noEmit"
   },
   "dependencies": {
+    "@hono/node-server": "^1.14.3",
+    "@tanstack/react-query": "^5.80.7",
+    "hono": "^4.7.11",
     "jotai": "^2.12.3",
     "lucide-react": "^0.511.0",
     "motion": "^12.12.1",
@@ -20,10 +25,13 @@
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.7",
+    "@types/node": "25.5.2",
     "@types/react": "^19.1.4",
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.2",
     "tailwindcss": "^4.1.7",
+    "tsdown": "0.21.7",
+    "tsx": "4.21.0",
     "typescript": "^6.0.2",
     "vite": "^6.3.5"
   }

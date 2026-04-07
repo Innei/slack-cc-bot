@@ -1,27 +1,13 @@
+import { Loader2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
+import { Badge } from '~/components/badge';
 import { Card, CardDescription, CardTitle } from '~/components/card';
-
-const SETTINGS_SECTIONS = [
-  {
-    title: 'Slack Connection',
-    description: 'Bot token, app token, and signing secret configuration.',
-  },
-  {
-    title: 'Claude Provider',
-    description: 'Model selection, max turns, and permission mode settings.',
-  },
-  {
-    title: 'Repository Scanning',
-    description: 'Repository root directory, scan depth, and workspace discovery.',
-  },
-  {
-    title: 'Logging',
-    description: 'Log level, file output, and structured logging preferences.',
-  },
-] as const;
+import { useSettings } from '~/hooks/use-api';
 
 export function SettingsPage() {
+  const { data: settings, isLoading } = useSettings();
+
   return (
     <div>
       <motion.div animate={{ opacity: 1, y: 0 }} initial={{ opacity: 0, y: 8 }}>
@@ -38,16 +24,53 @@ export function SettingsPage() {
 
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="mt-10 grid gap-4 sm:grid-cols-2"
+        className="mt-10"
         initial={{ opacity: 0, y: 12 }}
         transition={{ delay: 0.05 }}
       >
-        {SETTINGS_SECTIONS.map((section) => (
-          <Card key={section.title}>
-            <CardTitle>{section.title}</CardTitle>
-            <CardDescription>{section.description}</CardDescription>
-          </Card>
-        ))}
+        {isLoading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="size-5 animate-spin text-gray-400" strokeWidth={1.5} />
+          </div>
+        ) : settings ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Card>
+              <CardTitle>Slack Connection</CardTitle>
+              <CardDescription>Bot token and socket mode configuration.</CardDescription>
+              <div className="mt-4">
+                <Badge variant={settings.slackConnected ? 'success' : 'error'}>
+                  {settings.slackConnected ? 'Connected' : 'Disconnected'}
+                </Badge>
+              </div>
+            </Card>
+
+            <Card>
+              <CardTitle>Claude Provider</CardTitle>
+              <CardDescription>Model selection and turn limits.</CardDescription>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Badge>{settings.claudeModel}</Badge>
+                <Badge>Max {settings.claudeMaxTurns} turns</Badge>
+              </div>
+            </Card>
+
+            <Card>
+              <CardTitle>Repository Scanning</CardTitle>
+              <CardDescription>Workspace discovery configuration.</CardDescription>
+              <div className="mt-4 space-y-1 text-[13px] text-gray-500 font-mono">
+                <p>root: {settings.repoRootDir}</p>
+                <p>depth: {settings.repoScanDepth}</p>
+              </div>
+            </Card>
+
+            <Card>
+              <CardTitle>Logging</CardTitle>
+              <CardDescription>Log level and output preferences.</CardDescription>
+              <div className="mt-4">
+                <Badge>{settings.logLevel}</Badge>
+              </div>
+            </Card>
+          </div>
+        ) : null}
       </motion.div>
     </div>
   );

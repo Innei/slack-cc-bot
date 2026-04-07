@@ -98,6 +98,15 @@ importers:
 
   apps/web-ui:
     dependencies:
+      '@hono/node-server':
+        specifier: ^1.14.3
+        version: 1.19.12(hono@4.12.10)
+      '@tanstack/react-query':
+        specifier: ^5.80.7
+        version: 5.96.2(react@19.2.4)
+      hono:
+        specifier: ^4.7.11
+        version: 4.12.10
       jotai:
         specifier: ^2.12.3
         version: 2.19.0(@babel/core@7.29.0)(@babel/template@7.28.6)(@types/react@19.2.14)(react@19.2.4)
@@ -123,6 +132,9 @@ importers:
       '@tailwindcss/vite':
         specifier: ^4.1.7
         version: 4.2.2(vite@6.4.2(@types/node@25.5.2)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3))
+      '@types/node':
+        specifier: 25.5.2
+        version: 25.5.2
       '@types/react':
         specifier: ^19.1.4
         version: 19.2.14
@@ -135,6 +147,12 @@ importers:
       tailwindcss:
         specifier: ^4.1.7
         version: 4.2.2
+      tsdown:
+        specifier: 0.21.7
+        version: 0.21.7(@emnapi/core@1.9.2)(@emnapi/runtime@1.9.2)(typescript@6.0.2)
+      tsx:
+        specifier: 4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^6.0.2
         version: 6.0.2
@@ -2192,6 +2210,20 @@ packages:
       }
     peerDependencies:
       vite: ^5.2.0 || ^6 || ^7 || ^8
+
+  '@tanstack/query-core@5.96.2':
+    resolution:
+      {
+        integrity: sha512-hzI6cTVh4KNRk8UtoIBS7Lv9g6BnJPXvBKsvYH1aGWvv0347jT3BnSvztOE+kD76XGvZnRC/t6qdW1CaIfwCeA==,
+      }
+
+  '@tanstack/react-query@5.96.2':
+    resolution:
+      {
+        integrity: sha512-sYyzzJT4G0g02azzJ8o55VFFV31XvFpdUpG+unxS0vSaYsJnSPKGoI6WdPwUucJL1wpgGfwfmntNX/Ub1uOViA==,
+      }
+    peerDependencies:
+      react: ^18 || ^19
 
   '@tybys/wasm-util@0.10.1':
     resolution:
@@ -8320,6 +8352,13 @@ snapshots:
       '@tailwindcss/oxide': 4.2.2
       tailwindcss: 4.2.2
       vite: 6.4.2(@types/node@25.5.2)(jiti@2.6.1)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.3)
+
+  '@tanstack/query-core@5.96.2': {}
+
+  '@tanstack/react-query@5.96.2(react@19.2.4)':
+    dependencies:
+      '@tanstack/query-core': 5.96.2
+      react: 19.2.4
 
   '@tybys/wasm-util@0.10.1':
     dependencies:

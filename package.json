@@ -12,7 +12,7 @@
     "db:migrate": "pnpm --filter @slack-cc-bot/bot db:migrate",
     "db:studio": "pnpm --filter @slack-cc-bot/bot db:studio",
     "dev": "pnpm --filter @slack-cc-bot/bot dev",
-    "dev:web": "pnpm --filter @slack-cc-bot/web-ui dev",
+    "dev:web": "pnpm --filter @slack-cc-bot/web-ui dev & pnpm --filter @slack-cc-bot/web-ui dev:server",
     "e2e": "tsx packages/live-cli/src/cli.ts run",
     "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
     "e2e:interactive": "tsx packages/live-cli/src/cli.ts run --interactive",

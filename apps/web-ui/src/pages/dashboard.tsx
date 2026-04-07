@@ -1,9 +1,10 @@
-import { Activity, Clock, MessageSquare, Zap } from 'lucide-react';
+import { Activity, Clock, Loader2, MessageSquare, Zap } from 'lucide-react';
 import { motion } from 'motion/react';
 
 import { Badge } from '~/components/badge';
 import { Card, CardDescription, CardTitle } from '~/components/card';
 import { MetricCard } from '~/components/metric-card';
+import { useStatus } from '~/hooks/use-api';
 
 const PIPELINE_STEPS = [
   { label: 'Mention', color: 'var(--color-accent-develop)', icon: MessageSquare },
@@ -11,7 +12,18 @@ const PIPELINE_STEPS = [
   { label: 'Reply', color: 'var(--color-accent-ship)', icon: Activity },
 ] as const;
 
+function formatUptime(ms: number | null): string {
+  if (ms == null) return '--';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
 export function DashboardPage() {
+  const { data: status, isLoading } = useStatus();
+
   return (
     <div>
       <motion.div animate={{ opacity: 1, y: 0 }} initial={{ opacity: 0, y: 8 }}>
@@ -28,13 +40,36 @@ export function DashboardPage() {
 
       <motion.div
         animate={{ opacity: 1, y: 0 }}
-        className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+        className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
         initial={{ opacity: 0, y: 12 }}
         transition={{ delay: 0.05 }}
       >
-        <MetricCard description="Currently running" label="Active Sessions" value={0} />
-        <MetricCard description="Processed since midnight" label="Messages Today" value={0} />
-        <MetricCard description="Median latency" label="Avg Response" value="--" />
+        <MetricCard
+          description={status?.connected ? 'Online' : 'Offline'}
+          label="Status"
+          loading={isLoading}
+          value={status?.connected ? 'Up' : 'Down'}
+        />
+        <MetricCard
+          description="Active sessions"
+          label="Sessions"
+          loading={isLoading}
+          value={status?.activeSessionCount ?? 0}
+        />
+        <MetricCard
+          description="Processed today"
+          label="Messages"
+          loading={isLoading}
+          value={status?.messagesToday ?? 0}
+        />
+        <MetricCard
+          label="Latency"
+          loading={isLoading}
+          value={status?.avgResponseMs != null ? `${status.avgResponseMs}ms` : '--'}
+          description={
+            status?.avgResponseMs != null ? `${status.avgResponseMs}ms median` : 'No data'
+          }
+        />
       </motion.div>
 
       <motion.div
@@ -84,16 +119,22 @@ export function DashboardPage() {
           className="text-[32px] font-semibold text-gray-900"
           style={{ letterSpacing: '-1.28px', lineHeight: '1.25' }}
         >
-          Recent Activity
+          Uptime
         </h2>
         <div className="mt-6">
           <Card>
             <div className="flex items-center justify-center py-10 text-center">
-              <div>
-                <Clock className="mx-auto size-5 text-gray-400" strokeWidth={1.5} />
-                <p className="mt-3 text-[14px] text-gray-500">No recent activity</p>
-                <Badge>Waiting for events</Badge>
-              </div>
+              {isLoading ? (
+                <Loader2 className="mx-auto size-5 animate-spin text-gray-400" strokeWidth={1.5} />
+              ) : (
+                <div>
+                  <Clock className="mx-auto size-5 text-gray-400" strokeWidth={1.5} />
+                  <p className="mt-3 text-[14px] text-gray-500">
+                    {formatUptime(status?.uptime ?? null)}
+                  </p>
+                  <Badge>{status?.connected ? 'Connected' : 'Disconnected'}</Badge>
+                </div>
+              )}
             </div>
           </Card>
         </div>
