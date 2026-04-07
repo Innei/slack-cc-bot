@@ -574,7 +574,7 @@ function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
   for (const model of usage.modelUsage) {
     const modelName = model.model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
     const totalTokens = model.inputTokens + model.outputTokens;
-    const cacheHitPct = model.cacheHitRate.toFixed(0);
+    const cacheHitPct = model.cacheHitRate.toFixed(1);
 
     parts.push(`${modelName}: ${formatTokenCount(totalTokens)} tokens (${cacheHitPct}% cache)`);
   }
