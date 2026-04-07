@@ -1,3 +1,4 @@
+import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionStore } from '~/session/types.js';
@@ -5,11 +6,52 @@ import type { WorkspaceResolver } from '~/workspace/resolver.js';
 
 import type { SlackWebClientLike } from '../types.js';
 
+export const HOME_TAB_REFRESH_ACTION_ID = 'home_tab_refresh';
+
+const startTime = Date.now();
+
 export interface HomeTabDependencies {
   logger: AppLogger;
   memoryStore: MemoryStore;
+  providerRegistry: AgentProviderRegistry;
   sessionStore: SessionStore;
   workspaceResolver: WorkspaceResolver;
+}
+
+interface SlackUserProfile {
+  display_name?: string;
+  real_name?: string;
+}
+
+function formatUptime(ms: number): string {
+  const seconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days}d ${hours % 24}h ${minutes % 60}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${minutes % 60}m`;
+  }
+  if (minutes > 0) {
+    return `${minutes}m ${seconds % 60}s`;
+  }
+  return `${seconds}s`;
+}
+
+function resolveGitHash(): string {
+  try {
+    return (globalThis as any).__GIT_HASH__ || 'dev';
+  } catch {
+    return 'dev';
+  }
+}
+
+function resolveUserName(profile: SlackUserProfile | undefined): string | undefined {
+  if (!profile) return undefined;
+  return profile.display_name || profile.real_name || undefined;
 }
 
 export function createHomeTabHandler(deps: HomeTabDependencies) {
@@ -24,66 +66,131 @@ export function createHomeTabHandler(deps: HomeTabDependencies) {
       const botInfo = await client.auth!.test();
       const botMention = botInfo.user_id ? `<@${botInfo.user_id}>` : 'the bot';
 
+      // Fetch user profile for personalized greeting
+      let userName: string | undefined;
+      try {
+        const slackClient = client as any;
+        if (slackClient.users?.info) {
+          const userInfo = await slackClient.users.info({ user: userId });
+          userName = resolveUserName(userInfo?.user?.profile);
+        }
+      } catch {
+        // Silently fall back to generic greeting
+      }
+
       const sessionCount = deps.sessionStore.countAll();
       const memoryCount = deps.memoryStore.countAll();
       const repos = deps.workspaceResolver.listRepos();
+      const uptimeMs = Date.now() - startTime;
+      const uptimeFormatted = formatUptime(uptimeMs);
+      const gitHash = resolveGitHash();
+      const gitShort = gitHash.length >= 7 ? gitHash.slice(0, 7) : gitHash;
+
+      const greeting = userName ? `Hey ${userName}! 👋` : 'Hey there! 👋';
+      const now = new Date();
+      const timestamp = `<!date^${Math.floor(now.getTime() / 1000)}^Last visited {date_short_pretty} at {time}|${now.toISOString()}>`;
+
+      const providerIds = deps.providerRegistry.providerIds;
+      const defaultProvider = deps.providerRegistry.defaultProviderId;
+      const providerList = providerIds
+        .map((id) => (id === defaultProvider ? `\`${id}\` _(default)_` : `\`${id}\``))
+        .join(', ');
+
+      const blocks: unknown[] = [
+        // --- Personalized greeting ---
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `*${greeting}*\nYour AI-powered coding companion in Slack. Mention me, start a thread, or use the Messages tab to get started.`,
+          },
+        },
+        {
+          type: 'context',
+          elements: [{ type: 'mrkdwn', text: timestamp }],
+        },
+        { type: 'divider' },
+
+        // --- Getting Started ---
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '⚡ Getting Started', emoji: true },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: [
+              '💬 *Chat* — Click the *Messages* tab above to start a conversation',
+              `📌 *Mention* — Type ${botMention} in any channel to ask a question`,
+              '🧵 *Thread* — Reply in an existing thread to continue the conversation',
+            ].join('\n'),
+          },
+        },
+        { type: 'divider' },
+
+        // --- Overview stats ---
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '📊 Overview', emoji: true },
+        },
+        {
+          type: 'section',
+          fields: [
+            { type: 'mrkdwn', text: `*Sessions*\n${sessionCount}` },
+            { type: 'mrkdwn', text: `*Memories*\n${memoryCount}` },
+            { type: 'mrkdwn', text: `*Repositories*\n${repos.length}` },
+            { type: 'mrkdwn', text: `*Uptime*\n${uptimeFormatted}` },
+          ],
+        },
+        { type: 'divider' },
+
+        // --- Provider status ---
+        {
+          type: 'header',
+          text: { type: 'plain_text', text: '🔌 Providers', emoji: true },
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${providerList}`,
+          },
+        },
+        { type: 'divider' },
+
+        // --- Version info ---
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text:
+                'Version `' +
+                gitShort +
+                '`  ·  `/usage` detailed stats  ·  `/workspace` manage repos  ·  `/memory` manage memories',
+            },
+          ],
+        },
+
+        // --- Refresh button ---
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: '🔄 Refresh', emoji: true },
+              action_id: HOME_TAB_REFRESH_ACTION_ID,
+            },
+          ],
+        },
+      ];
 
       await client.views.publish({
         user_id: userId,
         view: {
           type: 'home',
-          blocks: [
-            {
-              type: 'header',
-              text: { type: 'plain_text', text: '🤖 Code Assistant', emoji: true },
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: 'Your AI-powered coding companion in Slack. Mention me, start a thread, or use the Messages tab to get started.',
-              },
-            },
-            { type: 'divider' },
-            {
-              type: 'header',
-              text: { type: 'plain_text', text: '⚡ Getting Started', emoji: true },
-            },
-            {
-              type: 'section',
-              text: {
-                type: 'mrkdwn',
-                text: [
-                  '💬 *Chat* — Click the *Messages* tab above to start a conversation',
-                  `📌 *Mention* — Type ${botMention} in any channel to ask a question`,
-                  '🧵 *Thread* — Reply in an existing thread to continue the conversation',
-                ].join('\n'),
-              },
-            },
-            { type: 'divider' },
-            {
-              type: 'header',
-              text: { type: 'plain_text', text: '📊 Overview', emoji: true },
-            },
-            {
-              type: 'section',
-              fields: [
-                { type: 'mrkdwn', text: `*Sessions*\n${sessionCount}` },
-                { type: 'mrkdwn', text: `*Memories*\n${memoryCount}` },
-                { type: 'mrkdwn', text: `*Repositories*\n${repos.length}` },
-              ],
-            },
-            { type: 'divider' },
-            {
-              type: 'context',
-              elements: [
-                {
-                  type: 'mrkdwn',
-                  text: '`/usage` detailed stats  ·  `/workspace` manage repos  ·  `/memory` manage memories',
-                },
-              ],
-            },
-          ],
+          blocks,
         },
       });
     } catch (error) {

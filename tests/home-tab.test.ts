@@ -4,10 +4,14 @@ import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
 
+import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionStore } from '~/session/types.js';
-import { createHomeTabHandler } from '~/slack/ingress/home-tab-handler.js';
+import {
+  createHomeTabHandler,
+  HOME_TAB_REFRESH_ACTION_ID,
+} from '~/slack/ingress/home-tab-handler.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 function createTestLogger(): AppLogger {
@@ -58,6 +62,21 @@ function createMockMemoryStore(count = 0): MemoryStore {
   };
 }
 
+function createMockProviderRegistry(
+  providers: string[] = ['claude-code'],
+  defaultId = 'claude-code',
+): AgentProviderRegistry {
+  return {
+    defaultProviderId: defaultId,
+    providerIds: providers,
+    has: (id: string) => providers.includes(id),
+    getExecutor: () => {
+      throw new Error('not implemented');
+    },
+    drain: async () => {},
+  };
+}
+
 function createMockClient() {
   return {
     assistant: { threads: { setStatus: vi.fn() } },
@@ -65,6 +84,11 @@ function createMockClient() {
     chat: { delete: vi.fn(), postMessage: vi.fn(), update: vi.fn() },
     conversations: { replies: vi.fn().mockResolvedValue({ messages: [] }) },
     reactions: { add: vi.fn() },
+    users: {
+      info: vi.fn().mockResolvedValue({
+        user: { profile: { display_name: 'Alice', real_name: 'Alice Smith' } },
+      }),
+    },
     views: { open: vi.fn(), publish: vi.fn().mockResolvedValue({}) },
   };
 }
@@ -77,6 +101,7 @@ describe('Home Tab Handler', () => {
     const handler = createHomeTabHandler({
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(5),
+      providerRegistry: createMockProviderRegistry(),
       sessionStore: createMockSessionStore(3),
       workspaceResolver: resolver,
     });
@@ -104,6 +129,7 @@ describe('Home Tab Handler', () => {
     const handler = createHomeTabHandler({
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
       sessionStore: createMockSessionStore(),
       workspaceResolver: resolver,
     });
@@ -123,6 +149,7 @@ describe('Home Tab Handler', () => {
     const handler = createHomeTabHandler({
       logger: createTestLogger(),
       memoryStore: createMockMemoryStore(10),
+      providerRegistry: createMockProviderRegistry(),
       sessionStore: createMockSessionStore(7),
       workspaceResolver: resolver,
     });
@@ -148,6 +175,117 @@ describe('Home Tab Handler', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
+  it('includes uptime in the stats block', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
+    const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
+
+    const handler = createHomeTabHandler({
+      logger: createTestLogger(),
+      memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
+      sessionStore: createMockSessionStore(),
+      workspaceResolver: resolver,
+    });
+
+    const client = createMockClient();
+    await handler({ client, event: { user: 'U123', tab: 'home' } });
+
+    const view = client.views.publish.mock.calls[0]![0].view;
+    const statsBlock = view.blocks.find((b: any) => b.type === 'section' && b.fields);
+    const fieldTexts = statsBlock.fields.map((f: any) => f.text);
+    expect(fieldTexts).toContainEqual(expect.stringContaining('Uptime'));
+  });
+
+  it('includes provider info', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
+    const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
+
+    const handler = createHomeTabHandler({
+      logger: createTestLogger(),
+      memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(['claude-code', 'openai'], 'claude-code'),
+      sessionStore: createMockSessionStore(),
+      workspaceResolver: resolver,
+    });
+
+    const client = createMockClient();
+    await handler({ client, event: { user: 'U123', tab: 'home' } });
+
+    const view = client.views.publish.mock.calls[0]![0].view;
+    const providerBlock = view.blocks.find(
+      (b: any) =>
+        b.type === 'section' &&
+        typeof b.text?.text === 'string' &&
+        b.text.text.includes('claude-code'),
+    );
+    expect(providerBlock).toBeDefined();
+    expect(providerBlock.text.text).toContain('default');
+    expect(providerBlock.text.text).toContain('openai');
+  });
+
+  it('includes personalized greeting with user name', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
+    const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
+
+    const handler = createHomeTabHandler({
+      logger: createTestLogger(),
+      memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
+      sessionStore: createMockSessionStore(),
+      workspaceResolver: resolver,
+    });
+
+    const client = createMockClient();
+    await handler({ client, event: { user: 'U123', tab: 'home' } });
+
+    const view = client.views.publish.mock.calls[0]![0].view;
+    const greetingBlock = view.blocks[0];
+    expect(greetingBlock.text.text).toContain('Alice');
+  });
+
+  it('falls back to generic greeting when user info unavailable', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
+    const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
+
+    const handler = createHomeTabHandler({
+      logger: createTestLogger(),
+      memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
+      sessionStore: createMockSessionStore(),
+      workspaceResolver: resolver,
+    });
+
+    const client = createMockClient();
+    // Remove users.info to simulate unavailability
+    delete (client as any).users;
+    await handler({ client, event: { user: 'U123', tab: 'home' } });
+
+    const view = client.views.publish.mock.calls[0]![0].view;
+    const greetingBlock = view.blocks[0];
+    expect(greetingBlock.text.text).toContain('Hey there!');
+  });
+
+  it('includes a refresh button', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
+    const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
+
+    const handler = createHomeTabHandler({
+      logger: createTestLogger(),
+      memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
+      sessionStore: createMockSessionStore(),
+      workspaceResolver: resolver,
+    });
+
+    const client = createMockClient();
+    await handler({ client, event: { user: 'U123', tab: 'home' } });
+
+    const view = client.views.publish.mock.calls[0]![0].view;
+    const actionsBlock = view.blocks.find((b: any) => b.type === 'actions');
+    expect(actionsBlock).toBeDefined();
+    expect(actionsBlock.elements[0].action_id).toBe(HOME_TAB_REFRESH_ACTION_ID);
+  });
+
   it('logs error when views.publish fails', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'home-tab-test-'));
     const resolver = new WorkspaceResolver({ repoRootDir: tmpDir, scanDepth: 0 });
@@ -156,6 +294,7 @@ describe('Home Tab Handler', () => {
     const handler = createHomeTabHandler({
       logger,
       memoryStore: createMockMemoryStore(),
+      providerRegistry: createMockProviderRegistry(),
       sessionStore: createMockSessionStore(),
       workspaceResolver: resolver,
     });

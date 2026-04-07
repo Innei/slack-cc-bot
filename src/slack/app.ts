@@ -17,13 +17,13 @@ import {
   createThreadReplyHandler,
   WORKSPACE_PICKER_ACTION_ID,
 } from './ingress/app-mention-handler.js';
-import { createHomeTabHandler } from './ingress/home-tab-handler.js';
+import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home-tab-handler.js';
 import { createReactionStopHandler } from './ingress/reaction-stop-handler.js';
+import type { SlackUserInputBridge } from './interaction/user-input-bridge.js';
 import {
   createStopMessageActionHandler,
   STOP_MESSAGE_ACTION_CALLBACK_ID,
 } from './interactions/stop-message-action.js';
-import type { SlackUserInputBridge } from './interaction/user-input-bridge.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
@@ -75,15 +75,19 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     userMessage: createAssistantUserMessageHandler(ingressDeps),
   });
 
-  app.event(
-    'app_home_opened',
-    createHomeTabHandler({
-      logger: deps.logger.withTag('slack:home'),
-      memoryStore: deps.memoryStore,
-      sessionStore: deps.sessionStore,
-      workspaceResolver: deps.workspaceResolver,
-    }),
-  );
+  const homeTabHandler = createHomeTabHandler({
+    logger: deps.logger.withTag('slack:home'),
+    memoryStore: deps.memoryStore,
+    providerRegistry: deps.providerRegistry,
+    sessionStore: deps.sessionStore,
+    workspaceResolver: deps.workspaceResolver,
+  });
+
+  app.event('app_home_opened', homeTabHandler);
+  app.action(HOME_TAB_REFRESH_ACTION_ID, async ({ ack, body, client }) => {
+    await ack();
+    await homeTabHandler({ client, event: { user: body.user.id, tab: 'home' } });
+  });
   app.event('app_mention', createAppMentionHandler(ingressDeps));
   app.event('message', createThreadReplyHandler(ingressDeps));
   app.event(
