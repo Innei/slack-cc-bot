@@ -179,6 +179,7 @@ describe('thread reply ingress', () => {
         channel: 'C123',
         team: 'T123',
         text: '',
+        subtype: 'file_share',
         files: [
           {
             id: 'F123ABC',
@@ -210,6 +211,7 @@ describe('thread reply ingress', () => {
         channel: 'C123',
         team: 'T123',
         text: 'Here is the screenshot',
+        subtype: 'file_share',
         files: [
           {
             id: 'F123DEF',
@@ -235,6 +237,53 @@ describe('thread reply ingress', () => {
       mentionText: 'Here is the screenshot',
       threadTs,
     });
+  });
+
+  it('processes thread uploads when Slack omits channel and team ids', async () => {
+    const threadTs = '1712345678.000113';
+    const { claudeExecutor, client, handler, logger, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs);
+
+    await handler({
+      client,
+      event: {
+        text: 'Please inspect this upload',
+        subtype: 'file_share',
+        files: [
+          {
+            id: 'F123JKL',
+            mimetype: 'image/png',
+            name: 'upload.png',
+            url_private: 'https://files.slack.com/files-pri/T123-F123JKL/upload.png',
+          },
+        ],
+        thread_ts: threadTs,
+        ts: '1712345678.000114',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(request).toMatchObject({
+      channelId: 'C123',
+      mentionText: 'Please inspect this upload',
+      threadTs,
+      userId: 'U123',
+    });
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Thread reply missing channel id for thread %s; falling back to session channel %s',
+      threadTs,
+      'C123',
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Thread reply missing team id for thread %s; continuing without it',
+      threadTs,
+    );
   });
 
   it('processes app mentions with image attachments only', async () => {

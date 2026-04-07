@@ -1,7 +1,7 @@
 import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware } from '@slack/bolt';
 
 import { redact } from '~/logger/redact.js';
-import { runtimeError } from '~/logger/runtime.js';
+import { runtimeError, runtimeWarn } from '~/logger/runtime.js';
 import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
@@ -80,15 +80,29 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       return;
     }
 
-    const channelId = typeof message.channel === 'string' ? message.channel : undefined;
+    const channelId =
+      typeof message.channel === 'string' && message.channel.trim()
+        ? message.channel
+        : session.channelId;
     const teamId = typeof message.team === 'string' ? message.team : undefined;
-    if (!channelId || !teamId) {
-      runtimeError(
+    if (!channelId) {
+      runtimeError(deps.logger, 'Skipping thread reply without channel id for thread %s', threadTs);
+      return;
+    }
+    if (typeof message.channel !== 'string' || !message.channel.trim()) {
+      runtimeWarn(
         deps.logger,
-        'Skipping thread reply without channel/team id for thread %s',
+        'Thread reply missing channel id for thread %s; falling back to session channel %s',
+        threadTs,
+        session.channelId,
+      );
+    }
+    if (!teamId) {
+      runtimeWarn(
+        deps.logger,
+        'Thread reply missing team id for thread %s; continuing without it',
         threadTs,
       );
-      return;
     }
 
     const botUserId = await getBotUserId(client);

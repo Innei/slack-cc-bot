@@ -30,7 +30,7 @@ export function shouldSkipBotAuthoredMessage(
   },
   botUserId: string | undefined,
 ): boolean {
-  if (message.subtype && message.subtype !== 'bot_message') {
+  if (message.subtype && message.subtype !== 'bot_message' && message.subtype !== 'file_share') {
     return true;
   }
 

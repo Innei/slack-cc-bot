@@ -137,6 +137,7 @@ export class SlackApiClient {
     channel_id: string;
     data: Uint8Array;
     filename: string;
+    initial_comment?: string;
     thread_ts: string;
     title?: string;
   }): Promise<SlackCompleteUploadExternalResponse> {
@@ -162,6 +163,7 @@ export class SlackApiClient {
       {
         channel_id,
         files: filesJson,
+        initial_comment: args.initial_comment,
         thread_ts,
       },
       'POST',
