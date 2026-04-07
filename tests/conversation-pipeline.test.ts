@@ -16,6 +16,7 @@ import {
   runConversationPipeline,
   stopActiveExecutionsStep,
 } from '~/slack/ingress/conversation-pipeline.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { ConversationPipelineContext, PipelineStep } from '~/slack/ingress/types.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -96,7 +97,7 @@ describe('DEFAULT_CONVERSATION_STEPS', () => {
 function createMinimalPipelineContext(overrides?: {
   addAcknowledgementReaction?: boolean;
   sessionStoreRecords?: SessionRecord[];
-  threadExecutionRegistry?: ThreadExecutionRegistry;
+  threadExecutionRegistry?: ConversationPipelineContext['deps']['threadExecutionRegistry'];
   workspaceResolverResult?: WorkspaceResolution;
 }): ConversationPipelineContext {
   const records = new Map(
@@ -198,6 +199,7 @@ function createMinimalPipelineContext(overrides?: {
         }),
       } as unknown as SlackThreadContextLoader,
       threadExecutionRegistry,
+      userInputBridge: new SlackUserInputBridge(logger as unknown as AppLogger),
       workspaceResolver: {
         resolveFromText: vi
           .fn()
@@ -458,11 +460,7 @@ describe('executeAgent step', () => {
         userId: 'U123',
       }),
     );
-    const firstRegisterCall = register.mock.calls[0];
-    if (!firstRegisterCall) {
-      throw new Error('Expected register() to be called once');
-    }
-    const registered = firstRegisterCall[0] as { stop: () => Promise<void> };
+    const registered = register.mock.calls[0]![0] as { stop: () => Promise<void> };
     expect(typeof registered.stop).toBe('function');
 
     expect(ctx.deps.claudeExecutor.execute).toHaveBeenCalledWith(

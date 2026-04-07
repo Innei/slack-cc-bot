@@ -75,6 +75,22 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       return;
     }
 
+    if (message.user && !message.bot_id && !message.subtype) {
+      const handledUserInput = await maybeHandlePendingUserInputReply(
+        client,
+        {
+          channelId: typeof message.channel === 'string' ? message.channel : undefined,
+          text: message.text,
+          threadTs,
+          userId: message.user,
+        },
+        deps,
+      );
+      if (handledUserInput) {
+        return;
+      }
+    }
+
     const session = deps.sessionStore.get(threadTs);
     if (!session) {
       return;
@@ -210,6 +226,20 @@ export function createAssistantUserMessageHandler(
       return;
     }
 
+    const handledUserInput = await maybeHandlePendingUserInputReply(
+      args.client as unknown as SlackWebClientLike,
+      {
+        channelId,
+        text: message.text,
+        threadTs,
+        userId,
+      },
+      deps,
+    );
+    if (handledUserInput) {
+      return;
+    }
+
     const client = args.client as unknown as SlackWebClientLike;
     const botUserId = await getBotUserId(client);
     if (
@@ -250,4 +280,34 @@ export function createAssistantUserMessageHandler(
       },
     );
   };
+}
+
+async function maybeHandlePendingUserInputReply(
+  client: SlackWebClientLike,
+  input: {
+    channelId?: string | undefined;
+    text: string;
+    threadTs: string;
+    userId: string;
+  },
+  deps: SlackIngressDependencies,
+): Promise<boolean> {
+  if (!deps.userInputBridge.hasPending(input.threadTs)) {
+    return false;
+  }
+
+  const result = deps.userInputBridge.submitReply({
+    text: input.text,
+    threadTs: input.threadTs,
+    userId: input.userId,
+  });
+  if (!result.handled) {
+    return false;
+  }
+
+  if (result.feedback && input.channelId) {
+    await deps.renderer.postThreadReply(client, input.channelId, input.threadTs, result.feedback);
+  }
+
+  return true;
 }

@@ -11,6 +11,7 @@
     "db:studio": "drizzle-kit studio",
     "dev": "nodemon",
     "e2e": "tsx packages/live-cli/src/cli.ts run",
+    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
     "e2e:interactive": "tsx packages/live-cli/src/cli.ts run --interactive",
     "e2e:list": "tsx packages/live-cli/src/cli.ts list",
     "start": "node dist/index.js",

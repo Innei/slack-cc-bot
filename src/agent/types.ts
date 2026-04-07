@@ -40,6 +40,44 @@ export interface SessionUsageInfo {
   totalCostUSD: number;
 }
 
+export interface AgentUserInputOption {
+  description: string;
+  label: string;
+  preview?: string | undefined;
+}
+
+export interface AgentUserInputQuestion {
+  header: string;
+  multiSelect?: boolean | undefined;
+  options: AgentUserInputOption[];
+  question: string;
+}
+
+export interface AgentUserInputRequest {
+  annotations?: Record<
+    string,
+    {
+      notes?: string | undefined;
+      preview?: string | undefined;
+    }
+  >;
+  answers?: Record<string, string>;
+  metadata?: {
+    source?: string | undefined;
+  };
+  questions: AgentUserInputQuestion[];
+}
+
+export interface AgentUserInputResponse {
+  annotations?: Record<
+    string,
+    {
+      notes?: string | undefined;
+      preview?: string | undefined;
+    }
+  >;
+  answers: Record<string, string>;
+}
 export type AgentExecutionEvent =
   | {
       type: 'lifecycle';
@@ -102,6 +140,16 @@ export interface AgentActivityState {
 
 export interface AgentExecutionSink {
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestUserInput?: (
+    request: AgentUserInputRequest,
+    options?: {
+      description?: string | undefined;
+      displayName?: string | undefined;
+      signal?: AbortSignal | undefined;
+      title?: string | undefined;
+      toolUseId?: string | undefined;
+    },
+  ) => Promise<AgentUserInputResponse>;
 }
 
 export interface AgentExecutor {

@@ -239,6 +239,8 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
     threadTs,
+    userId: message.user,
+    userInputBridge: deps.userInputBridge,
     ...(workspace ? { workspaceLabel: workspace.workspaceLabel } : {}),
   });
 

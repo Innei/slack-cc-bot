@@ -15,6 +15,7 @@ import {
   createWorkspaceSelectionViewHandler,
   WORKSPACE_MODAL_CALLBACK_ID,
 } from '~/slack/interactions/workspace-message-action.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -62,6 +63,9 @@ vi.mock('@anthropic-ai/sdk', () => ({
   },
 }));
 
+vi.mock('~/memory/memory-extractor.js', () => ({
+  extractImplicitMemories: vi.fn().mockResolvedValue([]),
+}));
 describe('Workspace message action test', () => {
   beforeEach(() => {
     sdkMocks.createSdkMcpServer.mockClear();
@@ -83,6 +87,7 @@ describe('Workspace message action test', () => {
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
+    const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const deps = {
@@ -93,6 +98,7 @@ describe('Workspace message action test', () => {
       sessionStore,
       threadContextLoader,
       threadExecutionRegistry: createThreadExecutionRegistry(),
+      userInputBridge,
       workspaceResolver,
     };
     const actionHandler = createWorkspaceMessageActionHandler(deps);

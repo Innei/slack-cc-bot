@@ -23,6 +23,7 @@ export const env = createEnv({
     CLAUDE_PERMISSION_MODE: z
       .enum(['default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk', 'auto'])
       .default('bypassPermissions'),
+    CLAUDE_ENABLE_SKILLS: booleanStringSchema.default(false),
     LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
     LOG_TO_FILE: booleanStringSchema.default(false),
     LOG_DIR: z.string().min(1).default('./logs'),
@@ -57,6 +58,7 @@ export const env = createEnv({
     CLAUDE_MODEL: process.env.CLAUDE_MODEL,
     CLAUDE_MAX_TURNS: process.env.CLAUDE_MAX_TURNS,
     CLAUDE_PERMISSION_MODE: process.env.CLAUDE_PERMISSION_MODE,
+    CLAUDE_ENABLE_SKILLS: process.env.CLAUDE_ENABLE_SKILLS,
     LOG_LEVEL: process.env.LOG_LEVEL,
     LOG_TO_FILE: process.env.LOG_TO_FILE,
     LOG_DIR: process.env.LOG_DIR,

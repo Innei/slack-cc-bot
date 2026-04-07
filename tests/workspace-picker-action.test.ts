@@ -14,6 +14,7 @@ import {
   createAppMentionHandler,
   WORKSPACE_PICKER_ACTION_ID,
 } from '~/slack/ingress/app-mention-handler.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { WORKSPACE_MODAL_CALLBACK_ID } from '~/slack/interactions/workspace-message-action.js';
 import { createWorkspacePickerActionHandler } from '~/slack/interactions/workspace-picker-action.js';
 import { encodeWorkspacePickerButtonValue } from '~/slack/interactions/workspace-picker-payload.js';
@@ -52,6 +53,10 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   tool: sdkMocks.tool,
 }));
 
+vi.mock('~/memory/memory-extractor.js', () => ({
+  extractImplicitMemories: vi.fn().mockResolvedValue([]),
+}));
+
 describe('Workspace picker action test', () => {
   beforeEach(() => {
     sdkMocks.createSdkMcpServer.mockClear();
@@ -71,6 +76,7 @@ describe('Workspace picker action test', () => {
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
+    const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 3 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const deps = {
@@ -81,6 +87,7 @@ describe('Workspace picker action test', () => {
       sessionStore,
       threadContextLoader,
       threadExecutionRegistry: createThreadExecutionRegistry(),
+      userInputBridge,
       workspaceResolver,
     };
 
@@ -184,6 +191,7 @@ describe('Workspace picker action test', () => {
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
+    const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
@@ -194,6 +202,7 @@ describe('Workspace picker action test', () => {
       sessionStore,
       threadContextLoader,
       threadExecutionRegistry: createThreadExecutionRegistry(),
+      userInputBridge,
       workspaceResolver,
     });
     const { client, postMessageCalls } = createSlackClientFixture();

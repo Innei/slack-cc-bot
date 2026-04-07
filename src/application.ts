@@ -18,6 +18,7 @@ import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
 export interface RuntimeApplication {
@@ -47,6 +48,7 @@ export function createApplication(): RuntimeApplication {
   const executionProbe = env.SLACK_E2E_ENABLED
     ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
     : undefined;
+  const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
 
   const ccExecutor = new ClaudeAgentSdkExecutor(
     logger.withTag('claude:session'),
@@ -66,6 +68,7 @@ export function createApplication(): RuntimeApplication {
     sessionStore,
     providerRegistry,
     threadExecutionRegistry,
+    userInputBridge,
     workspaceResolver,
     ...(statusProbe ? { statusProbe } : {}),
   });

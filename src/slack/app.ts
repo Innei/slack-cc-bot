@@ -23,6 +23,7 @@ import {
   createStopMessageActionHandler,
   STOP_MESSAGE_ACTION_CALLBACK_ID,
 } from './interactions/stop-message-action.js';
+import type { SlackUserInputBridge } from './interaction/user-input-bridge.js';
 import {
   createWorkspaceMessageActionHandler,
   createWorkspaceSelectionViewHandler,
@@ -40,6 +41,7 @@ export interface SlackApplicationDependencies {
   sessionStore: SessionStore;
   statusProbe?: SlackStatusProbe;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
 
@@ -65,6 +67,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     claudeExecutor: defaultExecutor,
     providerRegistry: deps.providerRegistry,
     threadExecutionRegistry: deps.threadExecutionRegistry,
+    userInputBridge: deps.userInputBridge,
     workspaceResolver: deps.workspaceResolver,
   };
   const assistant = new Assistant({

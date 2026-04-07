@@ -10,6 +10,7 @@ import {
   createAppMentionHandler,
   createThreadReplyHandler,
 } from '~/slack/ingress/app-mention-handler.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 import type { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -376,6 +377,7 @@ function createThreadReplyTestHarness(threadTs: string): {
     sessionStore,
     threadContextLoader,
     threadExecutionRegistry: createThreadExecutionRegistry(),
+    userInputBridge: new SlackUserInputBridge(logger),
     workspaceResolver,
   });
   const client = createSlackClientFixture();
@@ -446,6 +448,7 @@ function createDualIngressTestHarness(
     sessionStore,
     threadContextLoader,
     threadExecutionRegistry,
+    userInputBridge: new SlackUserInputBridge(logger),
     workspaceResolver,
   };
 

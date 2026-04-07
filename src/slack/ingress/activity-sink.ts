@@ -1,6 +1,9 @@
 import type {
   AgentActivityState,
   AgentExecutionEvent,
+  AgentUserInputQuestion,
+  AgentUserInputRequest,
+  AgentUserInputResponse,
   GeneratedImageFile,
   GeneratedOutputFile,
   SessionUsageInfo,
@@ -10,6 +13,7 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 
+import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
@@ -20,6 +24,8 @@ export interface ActivitySinkOptions {
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadTs: string;
+  userId?: string;
+  userInputBridge?: SlackUserInputBridge;
   workspaceLabel?: string;
 }
 
@@ -27,6 +33,16 @@ export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
   readonly terminalPhase: 'completed' | 'failed' | 'stopped' | undefined;
+  requestUserInput?: (
+    request: AgentUserInputRequest,
+    options?: {
+      description?: string | undefined;
+      displayName?: string | undefined;
+      signal?: AbortSignal | undefined;
+      title?: string | undefined;
+      toolUseId?: string | undefined;
+    },
+  ) => Promise<AgentUserInputResponse>;
   readonly toolHistory: Map<string, number>;
 }
 
@@ -34,7 +50,17 @@ const TOOL_VERB_PATTERN =
   /^(Reading|Searching|Finding|Fetching|Calling|Running|Exploring|Recalling|Saving|Checking|Applying|Editing|Generating|Waiting|Using) (.+?)(?:\.{3})?$/;
 
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
-  const { channel, client, logger, renderer, sessionStore, threadTs, workspaceLabel } = options;
+  const {
+    channel,
+    client,
+    logger,
+    renderer,
+    sessionStore,
+    threadTs,
+    userId,
+    userInputBridge,
+    workspaceLabel,
+  } = options;
 
   let progressMessageTs: string | undefined;
   let progressMessageActive = false;
@@ -259,6 +285,72 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   return {
     toolHistory,
+    ...(userInputBridge
+      ? {
+          requestUserInput: async (
+            request: AgentUserInputRequest,
+            requestOptions?: {
+              description?: string | undefined;
+              displayName?: string | undefined;
+              signal?: AbortSignal | undefined;
+              title?: string | undefined;
+              toolUseId?: string | undefined;
+            },
+          ): Promise<AgentUserInputResponse> => {
+            const answers: Record<string, string> = {};
+            const annotations: NonNullable<AgentUserInputResponse['annotations']> = {};
+
+            for (const [index, question] of request.questions.entries()) {
+              await renderer.setUiState(client, channel, {
+                threadTs,
+                status: 'Waiting for your reply...',
+                loadingMessages: [
+                  requestOptions?.title ?? 'Waiting for your reply in Slack...',
+                  truncateForSlackUi(question.question),
+                ],
+                clear: false,
+              });
+              await renderer.postThreadReply(
+                client,
+                channel,
+                threadTs,
+                formatUserInputQuestionMessage(question, {
+                  currentIndex: index + 1,
+                  description: requestOptions?.description,
+                  displayName: requestOptions?.displayName,
+                  title: requestOptions?.title,
+                  totalQuestions: request.questions.length,
+                }),
+              );
+
+              const reply = await userInputBridge.awaitAnswer({
+                expectedUserId: userId,
+                question,
+                signal: requestOptions?.signal,
+                threadTs,
+              });
+
+              answers[question.question] = reply.answer;
+              if (reply.annotation) {
+                annotations[question.question] = reply.annotation;
+              }
+            }
+
+            const defaultState = createDefaultThinkingState(threadTs);
+            await renderer.setUiState(client, channel, {
+              threadTs: defaultState.threadTs,
+              status: defaultState.status,
+              loadingMessages: defaultState.activities,
+              clear: false,
+            });
+
+            return {
+              answers,
+              ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
+            };
+          },
+        }
+      : {}),
 
     get terminalPhase() {
       return terminalPhase;
@@ -364,6 +456,56 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       }
     },
   };
+}
+
+function truncateForSlackUi(value: string, maxLength = 120): string {
+  const normalized = value.trim().replaceAll(/\s+/g, ' ');
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, Math.max(0, maxLength - 3))}...`;
+}
+
+function formatUserInputQuestionMessage(
+  question: AgentUserInputQuestion,
+  options: {
+    currentIndex: number;
+    description?: string | undefined;
+    displayName?: string | undefined;
+    title?: string | undefined;
+    totalQuestions: number;
+  },
+): string {
+  const header = [
+    '*Skill 需要你的输入*',
+    options.totalQuestions > 1
+      ? `_问题 ${options.currentIndex}/${options.totalQuestions}_`
+      : undefined,
+  ]
+    .filter(Boolean)
+    .join(' ');
+  const intro = options.title ?? options.displayName ?? 'Claude 需要你提供一个选项。';
+  const details = options.description ? [`${intro}`, '', options.description] : [intro];
+  const optionLines = question.options.map((option, index) => {
+    const description = option.description ? ` — ${option.description}` : '';
+    return `${index + 1}. *${option.label}*${description}`;
+  });
+  const replyHint = question.multiSelect
+    ? '请回复编号或标签，多个选项用逗号分隔；如果都不合适，也可以直接回复自由文本。'
+    : '请回复编号或标签；如果都不合适，也可以直接回复自由文本。';
+
+  return [
+    header,
+    '',
+    ...details,
+    '',
+    `*${question.header}*`,
+    question.question,
+    '',
+    ...optionLines,
+    '',
+    replyHint,
+  ].join('\n');
 }
 
 function createDefaultThinkingState(threadTs: string): AgentActivityState {

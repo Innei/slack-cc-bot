@@ -11,6 +11,7 @@ import type {
   SlackThreadContextLoader,
 } from '../context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from '../execution/thread-execution-registry.js';
+import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
@@ -23,6 +24,7 @@ export interface SlackIngressDependencies {
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
   threadExecutionRegistry: ThreadExecutionRegistry;
+  userInputBridge: SlackUserInputBridge;
   workspaceResolver: WorkspaceResolver;
 }
 

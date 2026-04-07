@@ -16,6 +16,7 @@ import type { SessionRecord, SessionStore } from '~/session/types.js';
 import { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
 import { createAppMentionHandler } from '~/slack/ingress/app-mention-handler.js';
+import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackBlock, SlackWebClientLike } from '~/slack/types.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
@@ -51,6 +52,10 @@ vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   tool: sdkMocks.tool,
 }));
 
+vi.mock('~/memory/memory-extractor.js', () => ({
+  extractImplicitMemories: vi.fn().mockResolvedValue([]),
+}));
+
 describe('Slack loading status test', () => {
   beforeEach(() => {
     sdkMocks.createSdkMcpServer.mockClear();
@@ -68,6 +73,7 @@ describe('Slack loading status test', () => {
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
+    const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
@@ -78,6 +84,7 @@ describe('Slack loading status test', () => {
       sessionStore,
       threadContextLoader,
       threadExecutionRegistry: createThreadExecutionRegistry(),
+      userInputBridge,
       workspaceResolver,
     });
     const {
@@ -504,6 +511,7 @@ describe('Slack loading status test', () => {
     const sessionStore = createMemorySessionStore();
     const renderer = new SlackRenderer(logger);
     const threadContextLoader = new SlackThreadContextLoader(logger);
+    const userInputBridge = new SlackUserInputBridge(logger);
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
@@ -514,6 +522,7 @@ describe('Slack loading status test', () => {
       sessionStore,
       threadContextLoader,
       threadExecutionRegistry: createThreadExecutionRegistry(),
+      userInputBridge,
       workspaceResolver,
     });
     const { client, deleteCalls, postMessageCalls, statusCalls, updateCalls } =
