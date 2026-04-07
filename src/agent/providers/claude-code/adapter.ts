@@ -191,7 +191,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
             'slack-ui': mcpServer,
           },
           permissionMode: env.CLAUDE_PERMISSION_MODE,
-          ...(env.CLAUDE_PERMISSION_MODE === 'bypassPermissions'
+          ...(env.CLAUDE_PERMISSION_MODE === 'bypassPermissions' || toolOptions.canUseTool
             ? { allowDangerouslySkipPermissions: true }
             : {}),
           persistSession: true,
@@ -464,6 +464,14 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
               answers: response.answers,
               ...(response.annotations ? { annotations: response.annotations } : {}),
             },
+          };
+        }
+
+        // --- bypassPermissions: auto-approve remaining tools ---
+        if (env.CLAUDE_PERMISSION_MODE === 'bypassPermissions') {
+          return {
+            behavior: 'allow',
+            updatedInput: input,
           };
         }
 
