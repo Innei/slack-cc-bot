@@ -9,11 +9,18 @@ import type { AppLogger } from '~/logger/index.js';
 import type { SlackBlock, SlackFilesUploadV2Response, SlackWebClientLike } from '../types.js';
 import type { SlackStatusProbe } from './status-probe.js';
 
+export interface TrackedTask {
+  details?: string | undefined;
+  status: 'pending' | 'in_progress' | 'complete' | 'error';
+  title: string;
+}
+
 interface RendererUiState {
   clear: boolean;
   composing?: boolean | undefined;
   loadingMessages?: string[] | undefined;
   status?: string | undefined;
+  tasks?: Map<string, TrackedTask> | undefined;
   threadTs: string;
   toolHistory?: Map<string, number> | undefined;
 }
@@ -416,9 +423,15 @@ export class SlackRenderer {
 
   private buildProgressMessageText(state: RendererUiState): string {
     const status = (state.status ?? '').trim() || DEFAULT_PROGRESS_STATUS;
-    const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
+    const parts: string[] = [status];
 
-    return detail && detail !== status ? `${status} — ${detail}` : status;
+    const taskLines = formatTaskLines(state.tasks);
+    if (taskLines) parts.push(taskLines);
+
+    const detail = this.collectRecentProgressDetails(state.loadingMessages, 1).at(0);
+    if (detail && detail !== status) parts.push(detail);
+
+    return parts.join(' — ');
   }
 
   private buildProgressMessageBlocks(state: RendererUiState): SlackBlock[] {
@@ -435,6 +448,14 @@ export class SlackRenderer {
       blocks.push({
         type: 'context',
         elements: [{ type: 'mrkdwn', text: status }],
+      });
+    }
+
+    const taskLines = formatTaskLines(state.tasks);
+    if (taskLines) {
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: taskLines }],
       });
     }
 
@@ -592,4 +613,30 @@ function formatTokenCount(count: number): string {
     return `${(count / 1_000).toFixed(1)}k`;
   }
   return String(count);
+}
+
+const TASK_STATUS_ICON: Record<TrackedTask['status'], string> = {
+  pending: ':hourglass:',
+  in_progress: ':spinner:',
+  complete: ':white_check_mark:',
+  error: ':x:',
+};
+
+function formatTaskLines(tasks?: Map<string, TrackedTask>): string | undefined {
+  if (!tasks || tasks.size === 0) return undefined;
+
+  const lines: string[] = [];
+  for (const [, task] of tasks) {
+    const icon = TASK_STATUS_ICON[task.status];
+    const detail = task.details ? ` — ${truncateTaskDetail(task.details)}` : '';
+    lines.push(`${icon} ${task.title}${detail}`);
+  }
+
+  return lines.join('\n');
+}
+
+function truncateTaskDetail(detail: string, maxLength = 80): string {
+  const normalized = detail.trim().replaceAll(/\s+/g, ' ');
+  if (normalized.length <= maxLength) return normalized;
+  return `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
 }

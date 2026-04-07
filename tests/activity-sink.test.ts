@@ -635,4 +635,199 @@ describe('createActivitySink', () => {
       {},
     );
   });
+
+  describe('task-update (sub-agent) tracking', () => {
+    it('tracks in-progress tasks and passes them to renderer on next activity-state', async () => {
+      const renderer = createRendererStub();
+      const upsert = vi.mocked(renderer.upsertThreadProgressMessage);
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        logger: createTestLogger(),
+        renderer,
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+      });
+
+      // Activate progress message first
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Reading files...',
+          activities: ['Reading src/index.ts...'],
+          clear: false,
+        },
+      });
+
+      // Fire a task-update
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-1',
+        title: 'Researching API docs',
+        status: 'in_progress',
+        details: 'Reading openapi.yaml...',
+      });
+
+      // The task-update should trigger an immediate progress update
+      const lastCall = upsert.mock.calls.at(-1);
+      expect(lastCall).toBeDefined();
+      const rendererState = lastCall![3] as { tasks?: Map<string, unknown> };
+      expect(rendererState.tasks).toBeInstanceOf(Map);
+      expect(rendererState.tasks!.get('task-1')).toEqual({
+        title: 'Researching API docs',
+        status: 'in_progress',
+        details: 'Reading openapi.yaml...',
+      });
+    });
+
+    it('prunes completed tasks on next activity-state cycle', async () => {
+      const renderer = createRendererStub();
+      const upsert = vi.mocked(renderer.upsertThreadProgressMessage);
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        logger: createTestLogger(),
+        renderer,
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+      });
+
+      // Activate progress
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Working...',
+          activities: ['Reading foo...'],
+          clear: false,
+        },
+      });
+
+      // Start then complete a task
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-1',
+        title: 'Analyze code',
+        status: 'in_progress',
+      });
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-1',
+        title: 'Analyze code',
+        status: 'complete',
+      });
+
+      // The completed task should still be visible in the immediate update
+      const afterComplete = upsert.mock.calls.at(-1)![3] as { tasks?: Map<string, unknown> };
+      expect(afterComplete.tasks!.get('task-1')).toEqual(
+        expect.objectContaining({ status: 'complete' }),
+      );
+
+      // On next activity-state, completed tasks get pruned
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Editing...',
+          activities: ['Editing bar...'],
+          clear: false,
+        },
+      });
+
+      const afterPrune = upsert.mock.calls.at(-1)![3] as { tasks?: Map<string, unknown> };
+      expect(afterPrune.tasks).toBeUndefined();
+    });
+
+    it('clears all tasks when assistant-message is sent', async () => {
+      const renderer = createRendererStub();
+      const upsert = vi.mocked(renderer.upsertThreadProgressMessage);
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        logger: createTestLogger(),
+        renderer,
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+      });
+
+      // Activate progress
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Working...',
+          activities: ['Reading x...'],
+          clear: false,
+        },
+      });
+
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-1',
+        title: 'Sub-agent research',
+        status: 'in_progress',
+      });
+
+      // Send assistant message — clears everything
+      await sink.onEvent({ type: 'assistant-message', text: 'Done!' });
+
+      // Next activity-state should not include the old task
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Next step...',
+          activities: ['Searching y...'],
+          clear: false,
+        },
+      });
+
+      const lastCall = upsert.mock.calls.at(-1)![3] as { tasks?: Map<string, unknown> };
+      expect(lastCall.tasks).toBeUndefined();
+    });
+
+    it('tracks multiple concurrent tasks', async () => {
+      const renderer = createRendererStub();
+      const upsert = vi.mocked(renderer.upsertThreadProgressMessage);
+      const sink = createActivitySink({
+        channel: 'C123',
+        client: createMockClient(),
+        logger: createTestLogger(),
+        renderer,
+        sessionStore: createMockSessionStore(),
+        threadTs: 'ts1',
+      });
+
+      // Activate progress
+      await sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Working...',
+          activities: ['Reading x...'],
+          clear: false,
+        },
+      });
+
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-1',
+        title: 'Research API',
+        status: 'in_progress',
+      });
+      await sink.onEvent({
+        type: 'task-update',
+        taskId: 'task-2',
+        title: 'Run tests',
+        status: 'in_progress',
+        details: 'Elapsed 2.0s',
+      });
+
+      const lastCall = upsert.mock.calls.at(-1)![3] as { tasks?: Map<string, unknown> };
+      expect(lastCall.tasks!.size).toBe(2);
+      expect(lastCall.tasks!.has('task-1')).toBe(true);
+      expect(lastCall.tasks!.has('task-2')).toBe(true);
+    });
+  });
 });
