@@ -47,7 +47,9 @@ async function main(): Promise<void> {
         allowedTools: ['Skill'],
         canUseTool: async (toolName, input, options) => {
           result.observedToolCalls.push({
-            ...(typeof options.description === 'string' ? { description: options.description } : {}),
+            ...(typeof options.description === 'string'
+              ? { description: options.description }
+              : {}),
             input,
             ...(typeof options.title === 'string' ? { title: options.title } : {}),
             toolName,
@@ -61,7 +63,7 @@ async function main(): Promise<void> {
             return {
               behavior: 'allow',
               updatedInput: {
-                ...((input as Record<string, unknown>) ?? {}),
+                ...(input as Record<string, unknown>),
                 answers: { 'Choose the probe option.': 'Option A' },
               },
             };
@@ -120,7 +122,9 @@ function assertVerification(result: VerificationResult): void {
   }
 
   if (result.probeFileCreated) {
-    throw new Error('Bash probe file was created, which means the gating callback did not block Bash.');
+    throw new Error(
+      'Bash probe file was created, which means the gating callback did not block Bash.',
+    );
   }
 
   if (!result.finalResultText?.includes('SKILL_GATING_PROBE_DONE answer=Option A')) {
