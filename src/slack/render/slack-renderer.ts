@@ -573,10 +573,12 @@ function formatSessionUsageInfo(usage: SessionUsageInfo): string | undefined {
   // Format model usage details
   for (const model of usage.modelUsage) {
     const modelName = model.model.replace(/^claude-/, '').replace(/-\d{8}$/, '');
-    const totalTokens = model.inputTokens + model.outputTokens;
-    const cacheHitPct = model.cacheHitRate.toFixed(1);
+    const nonCachedInputAndOutputTokens = model.inputTokens + model.outputTokens;
+    const cacheHitPct = model.cacheHitRate.toFixed(0);
 
-    parts.push(`${modelName}: ${formatTokenCount(totalTokens)} tokens (${cacheHitPct}% cache)`);
+    parts.push(
+      `${modelName}: ${formatTokenCount(nonCachedInputAndOutputTokens)} non-cached in + out (${cacheHitPct}% cache)`,
+    );
   }
 
   return parts.join('  \u00B7  ');
