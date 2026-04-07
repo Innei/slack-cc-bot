@@ -1,6 +1,6 @@
 ---
 name: writing-live-e2e-tests
-description: Use when writing or modifying live E2E test scenarios in src/e2e/live/ for the slack-cc-bot project. Triggers on tasks involving Slack bot integration testing, live scenario creation, or E2E test patterns with polling and assertions.
+description: Use when writing or modifying live E2E test scenarios in src/e2e/live/ for the kagura project. Triggers on tasks involving Slack bot integration testing, live scenario creation, or E2E test patterns with polling and assertions.
 ---
 
 # Writing Live E2E Tests

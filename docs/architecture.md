@@ -22,7 +22,7 @@ Replies are rendered as Slack block content instead of raw mrkdwn text, so forma
 
 ## Workspace routing
 
-New threads try to infer the target repository from the incoming Slack message. Mention a repo name such as `slack-cc-bot`, a relative repo path such as `team/slack-cc-bot`, or an absolute path under `REPO_ROOT_DIR`.
+New threads try to infer the target repository from the incoming Slack message. Mention a repo name such as `kagura`, a relative repo path such as `team/kagura`, or an absolute path under `REPO_ROOT_DIR`.
 
 If the bot cannot determine the workspace confidently and you want to bind one manually, use the Slack Message Action on the relevant message:
 

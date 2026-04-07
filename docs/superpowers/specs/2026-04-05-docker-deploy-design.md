@@ -2,7 +2,7 @@
 
 ## Summary
 
-This design adds an open-source-friendly Docker deployment path for `slack-cc-bot`.
+This design adds an open-source-friendly Docker deployment path for `kagura`.
 The repository will ship a production `Dockerfile`, a default `compose.yaml`, a
 `.dockerignore`, and README documentation that explains how to run the bot in a
 container while mounting host repositories into the container.

@@ -1,5 +1,5 @@
 services:
-  slack-cc-bot:
+  kagura:
     build:
       context: .
       dockerfile: Dockerfile

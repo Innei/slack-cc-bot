@@ -1,10 +1,10 @@
-# slack-cc-bot
+# kagura
 
 > Run the Anthropic Claude Agent SDK as a Slack bot with per-repo workspace routing.
 
 ## What this project does
 
-slack-cc-bot connects the Claude Agent SDK to a Slack workspace via Socket Mode.
+kagura connects the Claude Agent SDK to a Slack workspace via Socket Mode.
 When a user @mentions the bot in a channel or thread, the bot:
 
 1. Resolves which local code repository the conversation is about
@@ -92,8 +92,8 @@ src/
 ## Getting started
 
 ```bash
-git clone https://github.com/Innei/slack-cc-bot.git
-cd slack-cc-bot
+git clone https://github.com/Innei/kagura.git
+cd kagura
 pnpm install
 cp .env.example .env   # fill in required values
 pnpm dev               # development with hot reload

@@ -273,7 +273,7 @@ it('emits a stopped lifecycle event when the request abort signal fires', async 
       {
         type: 'system',
         subtype: 'init',
-        cwd: '/tmp/slack-cc-bot',
+        cwd: '/tmp/kagura',
         model: 'claude-sonnet-test',
         session_id: 'session-stop',
       },

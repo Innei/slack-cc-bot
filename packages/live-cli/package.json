@@ -1,5 +1,5 @@
 {
-  "name": "@slack-cc-bot/live-cli",
+  "name": "@kagura/live-cli",
   "version": "0.1.0",
   "private": true,
   "description": "Interactive CLI runner for Slack live E2E scenarios",

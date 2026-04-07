@@ -115,9 +115,9 @@ CMD ["pnpm", "start"]
 
 - [ ] **Step 4: Verify the image builds locally**
 
-Run: `docker build -t slack-cc-bot:local .`
+Run: `docker build -t kagura:local .`
 
-Expected: build completes successfully and the final stage is tagged as `slack-cc-bot:local`
+Expected: build completes successfully and the final stage is tagged as `kagura:local`
 
 ## Chunk 2: Compose Deployment
 
@@ -132,7 +132,7 @@ Expected: build completes successfully and the final stage is tagged as `slack-c
 
 ```yaml
 services:
-  slack-cc-bot:
+  kagura:
     build:
       context: .
       dockerfile: Dockerfile
@@ -198,7 +198,7 @@ Expected: compose renders a valid single-service configuration with the bind mou
 
 ````md
 ```bash
-docker build -t slack-cc-bot:local .
+docker build -t kagura:local .
 ```
 ````
 
@@ -245,6 +245,6 @@ Expected: all existing Vitest suites pass with no regressions from the Docker-re
 
 - [ ] **Step 3: Re-check the Docker artifacts after docs and env edits**
 
-Run: `docker build -t slack-cc-bot:local . && docker compose config`
+Run: `docker build -t kagura:local . && docker compose config`
 
 Expected: both commands succeed after the final file set is in place

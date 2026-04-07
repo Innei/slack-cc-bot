@@ -2,7 +2,7 @@
 
 ## Summary
 
-This design adds a minimal GitHub Actions CI workflow for `slack-cc-bot`.
+This design adds a minimal GitHub Actions CI workflow for `kagura`.
 The workflow will validate the repository by installing dependencies with
 `pnpm`, running `pnpm build`, and running `pnpm test` on both `push` to
 `main` and all `pull_request` events.

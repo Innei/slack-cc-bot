@@ -24,7 +24,7 @@ describe('Slack skill user input bridge', () => {
   it('routes AskUserQuestion-style prompts through Slack thread replies', async () => {
     const threadTs = '1712345678.000100';
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-'));
-    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
 
     const logger = createTestLogger();
@@ -57,7 +57,7 @@ describe('Slack skill user input bridge', () => {
       event: {
         channel: 'C123',
         team: 'T123',
-        text: '<@U_BOT> run the bazi skill in slack-cc-bot',
+        text: '<@U_BOT> run the bazi skill in kagura',
         ts: threadTs,
         type: 'app_mention',
         user: 'U123',
@@ -278,7 +278,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         messages: [
           {
             channel: 'C123',
-            text: '<@U_BOT> run the bazi skill in slack-cc-bot',
+            text: '<@U_BOT> run the bazi skill in kagura',
             thread_ts: threadTs,
             ts: threadTs,
             user: 'U123',

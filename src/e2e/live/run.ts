@@ -68,7 +68,7 @@ async function main(): Promise<void> {
 
   const runId = randomUUID();
   const recallMarker = `CROSS_SESSION_MEMORY_MARKER ${runId}`;
-  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'slack-cc-bot';
+  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'kagura';
   const targetFile =
     process.env.SLACK_E2E_TARGET_FILE?.trim() || 'src/slack/render/slack-renderer.ts';
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);

@@ -80,7 +80,7 @@ describe('Workspace message action test', () => {
 
   it('opens a modal and starts a new workspace-bound session from message action selection', async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-message-action-'));
-    const repoPath = path.join(repoRoot, 'team', 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'team', 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
 
     const logger = createTestLogger();
@@ -178,7 +178,7 @@ describe('Workspace message action test', () => {
             workspace_repo: {
               workspace_repo: {
                 selected_option: {
-                  value: 'team/slack-cc-bot',
+                  value: 'team/kagura',
                 },
               },
             },
@@ -205,12 +205,12 @@ describe('Workspace message action test', () => {
     expect(postMessageCalls).toEqual([
       {
         channel: 'C123',
-        text: 'Starting a workspace session in `team/slack-cc-bot`.',
+        text: 'Starting a workspace session in `team/kagura`.',
       },
       {
         blocks: [
           {
-            elements: [{ text: '_Working in team/slack-cc-bot_', type: 'mrkdwn' }],
+            elements: [{ text: '_Working in team/kagura_', type: 'mrkdwn' }],
             type: 'context',
           },
           {
@@ -258,9 +258,9 @@ describe('Workspace message action test', () => {
 
     expect(sessionStore.get('1712345678.000200')).toMatchObject({
       providerSessionId: 'session-message-action',
-      workspaceLabel: 'team/slack-cc-bot',
+      workspaceLabel: 'team/kagura',
       workspacePath: repoPath,
-      workspaceRepoId: 'team/slack-cc-bot',
+      workspaceRepoId: 'team/kagura',
       workspaceSource: 'manual',
     });
   });
@@ -389,7 +389,7 @@ function createSlackClientFixture(): {
           {
             text:
               args.ts === '1712345678.000200'
-                ? 'Starting a workspace session in `team/slack-cc-bot`.'
+                ? 'Starting a workspace session in `team/kagura`.'
                 : 'please handle this task in the right repo',
             thread_ts: args.ts,
             ts: args.ts,

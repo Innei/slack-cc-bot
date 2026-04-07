@@ -159,7 +159,7 @@ To generate the tokens:
 To build the image directly:
 
 ```bash
-docker build -t slack-cc-bot:local .
+docker build -t kagura:local .
 ```
 
 To start the bot with Compose:

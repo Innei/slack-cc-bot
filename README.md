@@ -1,6 +1,8 @@
-# slack-cc-bot
+# kagura
 
-Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) natively in Slack — `@mention` the bot, it routes the session into the right repository, and replies with Slack-native rich text, live progress, and persistent memory.
+> _In Japanese mythology, Ame-no-Uzume performed a divine dance before the closed doors of Amano-Iwato — the heavenly rock cave where Amaterasu had hidden herself, plunging the world into darkness. Her dance, accompanied by music and laughter, drew the sun goddess back into the world. This was the first **kagura** (神楽) — "the entertainment of the gods."_
+
+**kagura** brings that spirit to Slack. Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript) natively in your workspace — `@mention` the bot, it routes the session into the right repository, and replies with Slack-native rich text, live progress, and persistent memory. Every thread a stage, every response a dance.
 
 ![Node version](https://img.shields.io/badge/Node.js->=22-3c873a?style=flat-square)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6.0-blue?style=flat-square&logo=typescript&logoColor=white)
@@ -8,7 +10,7 @@ Run [Anthropic Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-
 
 ## Why
 
-Running a Claude agent inside Slack requires gluing together thread context, workspace routing, streaming UX, session persistence, and memory — all adapted to Slack's API conventions. **slack-cc-bot** handles that full lifecycle via [Socket Mode](https://api.slack.com/apis/socket-mode), so you can focus on the agent's behavior.
+Running a Claude agent inside Slack requires gluing together thread context, workspace routing, streaming UX, session persistence, and memory — all adapted to Slack's API conventions. **kagura** handles that full lifecycle via [Socket Mode](https://api.slack.com/apis/socket-mode), so you can focus on the agent's behavior.
 
 ## How it works
 
@@ -36,8 +38,8 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 ## Getting started
 
 ```bash
-git clone https://github.com/Innei/slack-cc-bot.git
-cd slack-cc-bot
+git clone https://github.com/Innei/kagura.git
+cd kagura
 pnpm install
 cp .env.example .env # fill in SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET, REPO_ROOT_DIR
 pnpm dev             # or: pnpm build && pnpm start

@@ -67,7 +67,7 @@ describe('Slack loading status test', () => {
   it('renders Claude SDK task and stream progress into Slack status updates', async () => {
     const threadTs = '1712345678.000100';
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-'));
-    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const logger = createTestLogger();
     const memoryStore = createMemoryStore();
@@ -154,7 +154,7 @@ describe('Slack loading status test', () => {
               index: 0,
               delta: {
                 type: 'input_json_delta',
-                partial_json: '{"path":"/tmp/slack-cc-bot/src/slack/render/slack-renderer.ts"}',
+                partial_json: '{"path":"/tmp/kagura/src/slack/render/slack-renderer.ts"}',
               },
             },
             parent_tool_use_id: null,
@@ -205,7 +205,7 @@ describe('Slack loading status test', () => {
       event: {
         channel: 'C123',
         team: 'T123',
-        text: '<@U_BOT> inspect the loading messages in slack-cc-bot',
+        text: '<@U_BOT> inspect the loading messages in kagura',
         ts: threadTs,
         type: 'app_mention',
         user: 'U123',
@@ -323,7 +323,7 @@ describe('Slack loading status test', () => {
     expect(postMessageCalls[1]).toEqual({
       blocks: [
         {
-          elements: [{ text: '_Working in slack-cc-bot_', type: 'mrkdwn' }],
+          elements: [{ text: '_Working in kagura_', type: 'mrkdwn' }],
           type: 'context',
         },
         {
@@ -356,7 +356,7 @@ describe('Slack loading status test', () => {
 
   it('emits stopped lifecycle when the executor abort signal fires', async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-'));
-    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const ac = new AbortController();
     const logger = createTestLogger();
@@ -409,7 +409,7 @@ describe('Slack loading status test', () => {
 
   it('resolves without failed lifecycle when publishing stopped throws', async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-sink-'));
-    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const ac = new AbortController();
     const logger = createTestLogger();
@@ -506,7 +506,7 @@ describe('Slack loading status test', () => {
   it('cleans up the thread progress message when execution fails after cutover', async () => {
     const threadTs = '1712345678.000101';
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-'));
-    const repoPath = path.join(repoRoot, 'slack-cc-bot');
+    const repoPath = path.join(repoRoot, 'kagura');
     fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
     const logger = createTestLogger();
     const memoryStore = createMemoryStore();
@@ -571,7 +571,7 @@ describe('Slack loading status test', () => {
       event: {
         channel: 'C123',
         team: 'T123',
-        text: '<@U_BOT> inspect failure cleanup in slack-cc-bot',
+        text: '<@U_BOT> inspect failure cleanup in kagura',
         ts: threadTs,
         type: 'app_mention',
         user: 'U123',
@@ -705,8 +705,8 @@ describe('Slack loading status test', () => {
     };
     const { tools } = await getMcpToolsForRequest(
       {
-        workspaceLabel: 'slack-cc-bot',
-        workspacePath: '/tmp/slack-cc-bot',
+        workspaceLabel: 'kagura',
+        workspacePath: '/tmp/kagura',
         workspaceRepoId: 'repo-1',
       },
       memoryStore,
@@ -880,7 +880,7 @@ function createExecutionRequest(
 ): AgentExecutionRequest {
   return {
     channelId: 'C123',
-    mentionText: '<@U_BOT> inspect the loading messages in slack-cc-bot',
+    mentionText: '<@U_BOT> inspect the loading messages in kagura',
     threadContext: {
       channelId: 'C123',
       fileLoadFailures: [],
@@ -1025,7 +1025,7 @@ function createSlackClientFixture({ threadTs }: { threadTs: string }): {
         messages: [
           {
             channel: 'C123',
-            text: '<@U_BOT> inspect the loading messages in slack-cc-bot',
+            text: '<@U_BOT> inspect the loading messages in kagura',
             thread_ts: threadTs,
             ts: threadTs,
             user: 'U123',

@@ -1,5 +1,5 @@
 {
-  "name": "slack-cc-bot",
+  "name": "kagura",
   "version": "0.1.0",
   "private": true,
   "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
@@ -11,9 +11,9 @@
     "db:studio": "drizzle-kit studio",
     "dev": "nodemon",
     "e2e": "tsx packages/live-cli/src/cli.ts run",
-    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
     "e2e:interactive": "tsx packages/live-cli/src/cli.ts run --interactive",
     "e2e:list": "tsx packages/live-cli/src/cli.ts list",
+    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

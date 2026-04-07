@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Project conventions and guidelines for AI-assisted development on **slack-cc-bot**.
+Project conventions and guidelines for AI-assisted development on **kagura**.
 
 ## Build & Run
 
