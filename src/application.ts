@@ -5,6 +5,7 @@ import type { App } from '@slack/bolt';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { createProviderRegistry } from '~/agent/registry.js';
+import { SqliteAnalyticsStore } from '~/analytics/sqlite-analytics-store.js';
 import { createDatabase } from '~/db/index.js';
 import { FileClaudeExecutionProbe } from '~/e2e/live/file-claude-execution-probe.js';
 import { FileSlackStatusProbe } from '~/e2e/live/file-slack-status-probe.js';
@@ -37,6 +38,7 @@ export function createApplication(): RuntimeApplication {
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
+  const analyticsStore = new SqliteAnalyticsStore(db, logger.withTag('analytics'));
   memoryStore.pruneAll();
   const workspaceResolver = new WorkspaceResolver({
     repoRootDir: env.REPO_ROOT_DIR,
@@ -63,6 +65,7 @@ export function createApplication(): RuntimeApplication {
   const threadExecutionRegistry = createThreadExecutionRegistry();
 
   const slackApp: App = createSlackApp({
+    analyticsStore,
     logger,
     memoryStore,
     sessionStore,

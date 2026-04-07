@@ -10,6 +10,7 @@ import { RECALL_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/rec
 import { SAVE_MEMORY_TOOL_NAME } from '~/agent/providers/claude-code/tools/save-memory.js';
 import { UPLOAD_SLACK_FILE_TOOL_NAME } from '~/agent/providers/claude-code/tools/upload-slack-file.js';
 import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -77,6 +78,7 @@ describe('Slack loading status test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
+      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -515,6 +517,7 @@ describe('Slack loading status test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
+      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
       claudeExecutor: executor,
       logger,
       memoryStore,

@@ -8,6 +8,7 @@ import type {
   GeneratedOutputFile,
   SessionUsageInfo,
 } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
@@ -18,6 +19,7 @@ import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
 export interface ActivitySinkOptions {
+  analyticsStore?: SessionAnalyticsStore;
   channel: string;
   client: SlackWebClientLike;
   logger: AppLogger;
@@ -51,6 +53,7 @@ const TOOL_VERB_PATTERN =
 
 export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
   const {
+    analyticsStore,
     channel,
     client,
     logger,
@@ -453,6 +456,13 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
           .catch((err) => {
             logger.warn('Failed to post session usage info: %s', String(err));
           });
+      }
+      if (sessionUsageInfo && analyticsStore) {
+        try {
+          analyticsStore.upsert(threadTs, userId, sessionUsageInfo);
+        } catch (err) {
+          logger.warn('Failed to persist session analytics: %s', String(err));
+        }
       }
     },
   };

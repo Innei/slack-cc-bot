@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentActivityState } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { SessionStore } from '~/session/types.js';
 import { createActivitySink } from '~/slack/ingress/activity-sink.js';
@@ -34,6 +35,7 @@ function createRendererStub(): SlackRenderer {
     setUiState: vi.fn().mockResolvedValue(undefined),
     showThinkingIndicator: vi.fn().mockResolvedValue(undefined),
     upsertThreadProgressMessage: vi.fn().mockResolvedValue('progress-ts'),
+    postSessionUsageInfo: vi.fn().mockResolvedValue(undefined),
   } as unknown as SlackRenderer;
 }
 
@@ -66,6 +68,12 @@ function createMockSessionStore(): SessionStore {
     patch: vi.fn().mockReturnValue(undefined),
     upsert: vi.fn().mockImplementation((r) => r),
   } as unknown as SessionStore;
+}
+
+function createMockAnalyticsStore(): SessionAnalyticsStore {
+  return {
+    upsert: vi.fn(),
+  };
 }
 
 describe('createActivitySink', () => {
@@ -634,5 +642,92 @@ describe('createActivitySink', () => {
       'Third message',
       {},
     );
+  });
+
+  it('persists analytics on finalize when lifecycle completed and usage info available', async () => {
+    const analyticsStore = createMockAnalyticsStore();
+    const sink = createActivitySink({
+      analyticsStore,
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer: createRendererStub(),
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U999',
+    });
+
+    const usage = {
+      totalCostUSD: 0.01,
+      durationMs: 5000,
+      modelUsage: [
+        {
+          model: 'claude-sonnet-4',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadInputTokens: 2000,
+          cacheCreationInputTokens: 100,
+          cacheHitRate: 66.7,
+          costUSD: 0.01,
+        },
+      ],
+    };
+
+    await sink.onEvent({ type: 'usage-info', usage });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(analyticsStore.upsert).toHaveBeenCalledWith('ts1', 'U999', usage);
+  });
+
+  it('does not persist analytics when no analyticsStore provided', async () => {
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer: createRendererStub(),
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U999',
+    });
+
+    const usage = {
+      totalCostUSD: 0.01,
+      durationMs: 5000,
+      modelUsage: [
+        {
+          model: 'claude-sonnet-4',
+          inputTokens: 1000,
+          outputTokens: 500,
+          cacheReadInputTokens: 2000,
+          cacheCreationInputTokens: 100,
+          cacheHitRate: 66.7,
+          costUSD: 0.01,
+        },
+      ],
+    };
+
+    await sink.onEvent({ type: 'usage-info', usage });
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+  });
+
+  it('does not persist analytics when no usage info available', async () => {
+    const analyticsStore = createMockAnalyticsStore();
+    const sink = createActivitySink({
+      analyticsStore,
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer: createRendererStub(),
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U999',
+    });
+
+    await sink.onEvent({ type: 'lifecycle', phase: 'completed' });
+    await sink.finalize();
+
+    expect(analyticsStore.upsert).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const sessions = sqliteTable('sessions', {
   threadTs: text('thread_ts').primaryKey(),
@@ -29,4 +29,18 @@ export const memories = sqliteTable('memories', {
   metadata: text('metadata'),
   createdAt: text('created_at').notNull(),
   expiresAt: text('expires_at'),
+});
+
+export const sessionAnalytics = sqliteTable('session_analytics', {
+  id: text('id').primaryKey(),
+  threadTs: text('thread_ts').notNull(),
+  userId: text('user_id'),
+  totalCostUSD: real('total_cost_usd'),
+  durationMs: integer('duration_ms'),
+  inputTokens: integer('input_tokens'),
+  outputTokens: integer('output_tokens'),
+  cacheReadInputTokens: integer('cache_read_input_tokens'),
+  cacheCreationInputTokens: integer('cache_creation_input_tokens'),
+  modelUsageJson: text('model_usage_json'),
+  createdAt: text('created_at').notNull(),
 });

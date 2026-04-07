@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentExecutor } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -370,6 +371,7 @@ function createThreadReplyTestHarness(threadTs: string): {
     }),
   } as unknown as WorkspaceResolver;
   const handler = createThreadReplyHandler({
+    analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
     claudeExecutor,
     logger,
     memoryStore: createMemoryStore(),
@@ -441,6 +443,7 @@ function createDualIngressTestHarness(
     }),
   } as unknown as WorkspaceResolver;
   const deps = {
+    analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
     claudeExecutor,
     logger,
     memoryStore: createMemoryStore(),

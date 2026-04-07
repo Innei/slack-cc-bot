@@ -1,5 +1,6 @@
 import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { AgentExecutor } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { ContextMemories, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -16,6 +17,7 @@ import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
 
 export interface SlackIngressDependencies {
+  analyticsStore: SessionAnalyticsStore;
   claudeExecutor: AgentExecutor;
   logger: AppLogger;
   memoryStore: MemoryStore;

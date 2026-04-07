@@ -233,6 +233,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
 
   const executor = resolveExecutor(ctx.existingSession, deps);
   const sink = createActivitySink({
+    analyticsStore: deps.analyticsStore,
     channel: message.channel,
     client,
     logger: deps.logger,

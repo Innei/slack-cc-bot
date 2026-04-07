@@ -165,10 +165,9 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     const { systemPrompt, userPrompt } = createClaudePromptInput(request);
 
     this.logger.info(
-      'Creating Claude SDK query (thread %s, model=%s, maxTurns=%d, permissionMode=%s, resume=%s, cwd=%s)',
+      'Creating Claude SDK query (thread %s, model=%s, permissionMode=%s, resume=%s, cwd=%s)',
       request.threadTs,
       env.CLAUDE_MODEL ?? 'default',
-      env.CLAUDE_MAX_TURNS,
       env.CLAUDE_PERMISSION_MODE,
       request.resumeHandle ?? 'none',
       request.workspacePath ?? '(none)',
@@ -184,7 +183,6 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           agentProgressSummaries: true,
           includeHookEvents: true,
           includePartialMessages: true,
-          maxTurns: env.CLAUDE_MAX_TURNS,
           ...(request.workspacePath ? { cwd: request.workspacePath } : {}),
           systemPrompt,
           mcpServers: {

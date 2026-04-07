@@ -1,6 +1,7 @@
 import { App, Assistant } from '@slack/bolt';
 
 import type { AgentProviderRegistry } from '~/agent/registry.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
@@ -35,6 +36,7 @@ import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
 
 export interface SlackApplicationDependencies {
+  analyticsStore: SessionAnalyticsStore;
   logger: AppLogger;
   memoryStore: MemoryStore;
   providerRegistry: AgentProviderRegistry;
@@ -59,6 +61,7 @@ export function createSlackApp(deps: SlackApplicationDependencies): App {
     deps.providerRegistry.defaultProviderId,
   );
   const ingressDeps = {
+    analyticsStore: deps.analyticsStore,
     logger: deps.logger.withTag('slack:ingress'),
     memoryStore: deps.memoryStore,
     renderer,

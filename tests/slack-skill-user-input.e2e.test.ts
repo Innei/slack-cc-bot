@@ -5,6 +5,7 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentExecutionRequest, AgentExecutionSink, AgentExecutor } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { ContextMemories, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -35,6 +36,7 @@ describe('Slack skill user input bridge', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = createInteractiveExecutor();
     const deps = {
+      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
       claudeExecutor: executor,
       logger,
       memoryStore,

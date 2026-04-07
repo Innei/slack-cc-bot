@@ -19,7 +19,6 @@ export const env = createEnv({
     SLACK_REACTION_NAME: z.string().min(1).default('eyes'),
     SLACK_REACTION_DONE_NAME: z.string().min(1).default('white_check_mark'),
     CLAUDE_MODEL: z.string().min(1).optional(),
-    CLAUDE_MAX_TURNS: z.coerce.number().int().positive().default(24),
     CLAUDE_PERMISSION_MODE: z
       .enum(['default', 'acceptEdits', 'bypassPermissions', 'plan', 'dontAsk', 'auto'])
       .default('bypassPermissions'),
@@ -56,7 +55,6 @@ export const env = createEnv({
     SLACK_REACTION_NAME: process.env.SLACK_REACTION_NAME,
     SLACK_REACTION_DONE_NAME: process.env.SLACK_REACTION_DONE_NAME,
     CLAUDE_MODEL: process.env.CLAUDE_MODEL,
-    CLAUDE_MAX_TURNS: process.env.CLAUDE_MAX_TURNS,
     CLAUDE_PERMISSION_MODE: process.env.CLAUDE_PERMISSION_MODE,
     CLAUDE_ENABLE_SKILLS: process.env.CLAUDE_ENABLE_SKILLS,
     LOG_LEVEL: process.env.LOG_LEVEL,

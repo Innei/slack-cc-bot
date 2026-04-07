@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import type { AgentExecutor } from '~/agent/types.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -164,6 +165,7 @@ function createMinimalPipelineContext(overrides?: {
       },
     } as unknown as SlackWebClientLike,
     deps: {
+      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
       claudeExecutor: {
         providerId: 'claude',
         execute: vi.fn().mockResolvedValue(undefined),

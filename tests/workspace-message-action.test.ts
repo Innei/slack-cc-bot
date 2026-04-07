@@ -5,6 +5,7 @@ import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
+import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
@@ -91,6 +92,7 @@ describe('Workspace message action test', () => {
     const workspaceResolver = new WorkspaceResolver({ repoRootDir: repoRoot, scanDepth: 2 });
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const deps = {
+      analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
       claudeExecutor: executor,
       logger,
       memoryStore,
