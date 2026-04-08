@@ -13,9 +13,9 @@ process.env.CLAUDE_PERMISSION_MODE = 'default';
 
 const { createApplication } = await import('~/application.js');
 const { env } = await import('~/env/server.js');
-
-const PERMISSION_APPROVE_ACTION_ID = 'permission_approve_action';
-const PERMISSION_DENY_ACTION_ID = 'permission_deny_action';
+const { PERMISSION_APPROVE_ACTION_ID, PERMISSION_DENY_ACTION_ID } = await import(
+  '~/slack/interaction/permission-bridge.js'
+);
 
 interface PermissionApprovalResult {
   botUserId: string;
@@ -28,6 +28,7 @@ interface PermissionApprovalResult {
     permissionMessageContainsToolName: boolean;
     permissionMessagePosted: boolean;
   };
+  observedToolName?: string;
   passed: boolean;
   permissionMessageBlocks?: unknown[] | undefined;
   permissionMessageTs?: string;
@@ -120,6 +121,9 @@ async function main(): Promise<void> {
     }
 
     assertResult(result);
+    if (result.rootMessageTs) {
+      await application.threadExecutionRegistry.stopAll(result.rootMessageTs, 'user_stop');
+    }
     result.passed = true;
     await writeResult(result);
 
@@ -161,8 +165,9 @@ function analyzePermissionMessage(
   const blocks = message.blocks ?? [];
   const text = typeof message.text === 'string' ? message.text : '';
 
-  // The first permission request may be for any tool (Claude may call other tools before Bash).
-  if (text.includes('Claude 想要使用') || text.toLowerCase().includes('tool')) {
+  const toolName = extractToolName(text);
+  if (toolName) {
+    result.observedToolName = toolName;
     result.matched.permissionMessageContainsToolName = true;
   }
 
@@ -186,6 +191,20 @@ function analyzePermissionMessage(
   const hasSection = blocks.some((b) => b.type === 'section');
   const hasActions = blocks.some((b) => b.type === 'actions');
   result.matched.permissionMessageHasCorrectFormat = hasSection && hasActions;
+}
+
+function extractToolName(text: string): string | undefined {
+  const markdownMatch = text.match(/Claude 想要使用\s+\*([^*\n]+)\*\s+工具/u);
+  if (markdownMatch?.[1]?.trim()) {
+    return markdownMatch[1].trim();
+  }
+
+  const plainTextMatch = text.match(/Claude 想要使用\s+([^\n]+?)\s+工具/u);
+  if (plainTextMatch?.[1]?.trim()) {
+    return plainTextMatch[1].trim();
+  }
+
+  return undefined;
 }
 
 function assertResult(result: PermissionApprovalResult): void {
