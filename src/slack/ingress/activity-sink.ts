@@ -321,24 +321,25 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
                 logger.warn('Failed to publish permission waiting UI state: %s', String(error));
               });
 
-            const result = await permissionBridge.requestPermission(client, {
-              channelId: channel,
-              description: request.description,
-              input: request.input,
-              signal: requestOptions?.signal,
-              threadTs,
-              toolName: request.toolName,
-            });
-
             const defaultState = createDefaultThinkingState(threadTs);
-            await renderer.setUiState(client, channel, {
-              threadTs: defaultState.threadTs,
-              status: defaultState.status,
-              loadingMessages: defaultState.activities,
-              clear: false,
-            });
-
-            return result;
+            try {
+              return await permissionBridge.requestPermission(client, {
+                channelId: channel,
+                description: request.description,
+                expectedUserId: userId,
+                input: request.input,
+                signal: requestOptions?.signal,
+                threadTs,
+                toolName: request.toolName,
+              });
+            } finally {
+              await renderer.setUiState(client, channel, {
+                threadTs: defaultState.threadTs,
+                status: defaultState.status,
+                loadingMessages: defaultState.activities,
+                clear: false,
+              });
+            }
           },
         }
       : {}),

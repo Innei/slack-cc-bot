@@ -683,6 +683,7 @@ describe('createActivitySink', () => {
       expect.anything(),
       expect.objectContaining({
         channelId: 'C123',
+        expectedUserId: undefined,
         threadTs: 'ts1',
         toolName: 'mcp__slack-ui__save_memory',
       }),
@@ -719,6 +720,65 @@ describe('createActivitySink', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'Failed to publish permission waiting UI state: %s',
       'Error: bolt-app must be less than 51 characters',
+    );
+  });
+
+  it('passes the thread user id as expected approver when present', async () => {
+    const renderer = createRendererStub();
+    const permissionBridge = {
+      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
+    };
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      permissionBridge: permissionBridge as any,
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U123',
+    });
+
+    await sink.requestPermission?.({
+      toolName: 'mcp__slack-ui__save_memory',
+      input: { category: 'context', content: 'hello' },
+    });
+
+    expect(permissionBridge.requestPermission).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        expectedUserId: 'U123',
+      }),
+    );
+  });
+
+  it('restores the default UI state even when permission request rejects', async () => {
+    const renderer = createRendererStub();
+    const permissionBridge = {
+      requestPermission: vi.fn().mockRejectedValue(new Error('permission request aborted')),
+    };
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      permissionBridge: permissionBridge as any,
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await expect(
+      sink.requestPermission?.({
+        toolName: 'mcp__slack-ui__save_memory',
+        input: { category: 'context', content: 'hello' },
+      }),
+    ).rejects.toThrow('permission request aborted');
+
+    expect(vi.mocked(renderer.setUiState).mock.calls.at(-1)?.[2]).toEqual(
+      expect.objectContaining({
+        threadTs: 'ts1',
+        status: 'Thinking...',
+      }),
     );
   });
 

@@ -8,6 +8,7 @@ export const PERMISSION_DENY_ACTION_ID = 'permission_deny_action';
 export interface SlackPermissionRequest {
   channelId: string;
   description?: string | undefined;
+  expectedUserId?: string | undefined;
   input?: Record<string, unknown> | undefined;
   signal?: AbortSignal | undefined;
   threadTs: string;
@@ -20,6 +21,7 @@ export interface SlackPermissionResponse {
 
 interface PendingSlackPermissionRequest {
   channelId: string;
+  expectedUserId?: string | undefined;
   messageTs: string;
   reject: (reason?: unknown) => void;
   resolve: (value: SlackPermissionResponse) => void;
@@ -29,8 +31,14 @@ interface PendingSlackPermissionRequest {
 
 interface PermissionActionBody {
   channel?: { id?: string };
+  container?: { channel_id?: string; message_ts?: string; thread_ts?: string };
   message?: { ts?: string; thread_ts?: string };
   user?: { id?: string };
+}
+
+interface PermissionActionResult {
+  feedback?: string;
+  handled: boolean;
 }
 
 export class SlackPermissionBridge {
@@ -78,10 +86,10 @@ export class SlackPermissionBridge {
     }
 
     return await new Promise<SlackPermissionResponse>((resolve, reject) => {
-      const cleanupAbort = this.attachAbortHandler(client, messageTs, request, reject);
-      this.pendingMessageByThread.set(request.threadTs, messageTs);
-      this.pendingByMessageTs.set(messageTs, {
+      let cleanupAbort = () => {};
+      const pending: PendingSlackPermissionRequest = {
         channelId: request.channelId,
+        expectedUserId: request.expectedUserId,
         messageTs,
         reject: (reason) => {
           cleanupAbort();
@@ -97,7 +105,17 @@ export class SlackPermissionBridge {
         },
         threadTs: request.threadTs,
         toolName: request.toolName,
-      });
+      };
+
+      this.pendingMessageByThread.set(request.threadTs, messageTs);
+      this.pendingByMessageTs.set(messageTs, pending);
+      cleanupAbort = this.attachAbortHandler(client, messageTs, request, pending.reject);
+
+      if (request.signal?.aborted) {
+        pending.reject(
+          request.signal.reason ?? new Error(`Permission request aborted for ${request.threadTs}`),
+        );
+      }
     });
   }
 
@@ -105,19 +123,30 @@ export class SlackPermissionBridge {
     client: SlackWebClientLike,
     body: unknown,
     allowed: boolean,
-  ): Promise<boolean> {
+  ): Promise<PermissionActionResult> {
     const parsed = body as PermissionActionBody;
-    const messageTs = parsed.message?.ts?.trim();
+    const messageTs =
+      parsed.message?.ts?.trim() ??
+      parsed.container?.message_ts?.trim() ??
+      parsed.message?.thread_ts?.trim() ??
+      parsed.container?.thread_ts?.trim();
     if (!messageTs) {
-      return false;
+      return { handled: false };
     }
 
     const pending = this.pendingByMessageTs.get(messageTs);
     if (!pending) {
-      return false;
+      return { handled: false };
     }
 
     const actionUserId = parsed.user?.id?.trim();
+    if (pending.expectedUserId && actionUserId && actionUserId !== pending.expectedUserId) {
+      return {
+        handled: true,
+        feedback: `只有 <@${pending.expectedUserId}> 可以批准或拒绝此操作。`,
+      };
+    }
+
     await this.updateResolvedMessage(client, {
       actionUserId,
       allowed,
@@ -133,7 +162,7 @@ export class SlackPermissionBridge {
       String(allowed),
     );
     pending.resolve({ allowed });
-    return true;
+    return { handled: true };
   }
 
   private attachAbortHandler(
@@ -199,7 +228,19 @@ export function createPermissionActionHandler(
     client: unknown;
   }): Promise<void> => {
     await args.ack();
-    await bridge.handleAction(args.client as SlackWebClientLike, args.body, allowed);
+    const result = await bridge.handleAction(args.client as SlackWebClientLike, args.body, allowed);
+
+    const body = args.body as PermissionActionBody;
+    const channelId = body.channel?.id?.trim() ?? body.container?.channel_id?.trim();
+    const userId = body.user?.id?.trim();
+
+    if ((!result.handled || result.feedback) && channelId && userId && args.client) {
+      await (args.client as SlackWebClientLike).chat.postEphemeral?.({
+        channel: channelId,
+        text: result.feedback ?? '没有待处理的权限请求。',
+        user: userId,
+      });
+    }
   };
 }
 
@@ -291,7 +332,44 @@ function formatInputPreview(input: Record<string, unknown> | undefined): string 
     return undefined;
   }
 
-  const serialized = JSON.stringify(input, null, 2);
+  const serialized = safeSerializeForSlack(input);
   const truncated = serialized.length > 1200 ? `${serialized.slice(0, 1197)}...` : serialized;
   return ['```', truncated, '```'].join('\n');
+}
+
+function safeSerializeForSlack(input: Record<string, unknown>): string {
+  const seen = new WeakSet<object>();
+
+  try {
+    return (
+      JSON.stringify(
+        input,
+        (_key, value) => {
+          if (typeof value === 'bigint') {
+            return value.toString();
+          }
+          if (typeof value === 'function') {
+            return '[Function]';
+          }
+          if (typeof value === 'symbol') {
+            return value.toString();
+          }
+          if (typeof value === 'object' && value !== null) {
+            if (seen.has(value)) {
+              return '[Circular]';
+            }
+            seen.add(value);
+          }
+          return value;
+        },
+        2,
+      ) ?? '[Unserializable input]'
+    );
+  } catch {
+    try {
+      return String(input);
+    } catch {
+      return '[Unserializable input]';
+    }
+  }
 }
