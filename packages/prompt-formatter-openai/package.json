@@ -1,0 +1,25 @@
+{
+  "name": "@kagura/prompt-formatter-openai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "OpenAI API formatter for @kagura/prompt-pipeline",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@kagura/prompt-pipeline": "workspace:*",
+    "tsdown": "0.21.7",
+    "typescript": "^6.0.2"
+  },
+  "peerDependencies": {
+    "@kagura/prompt-pipeline": "workspace:*"
+  }
+}
