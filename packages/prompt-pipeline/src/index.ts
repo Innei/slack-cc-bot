@@ -1,4 +1,5 @@
 export { PipelineConfigError, PluginInjectError } from './errors.js';
+export { definePlugin } from './plugin.js';
 export type {
   Formatter,
   ImageAsset,
