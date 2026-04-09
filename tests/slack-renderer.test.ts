@@ -2,11 +2,11 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { GeneratedImageFile, GeneratedOutputFile } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
-import { SlackRenderer } from '~/slack/render/slack-renderer.js';
+import { SlackRenderer, SlackRenderTimeoutError } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 
 function createTestLogger(): AppLogger {
@@ -55,6 +55,10 @@ function createClientFixture(): {
 
   return { client, imagePostCalls };
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe('SlackRenderer.postGeneratedImages', () => {
   it('uploads each file and posts an image block referencing the uploaded file id', async () => {
@@ -190,5 +194,29 @@ describe('SlackRenderer.postGeneratedFiles', () => {
     expect(uploadCalls[0]).not.toHaveProperty('alt_text');
     expect(uploadCalls[0]!.file.equals(Buffer.from('report body'))).toBe(true);
     expect(imagePostCalls).toHaveLength(0);
+  });
+});
+
+describe('SlackRenderer timeouts', () => {
+  it('times out Slack API operations that never settle', async () => {
+    vi.useFakeTimers();
+
+    const { client } = createClientFixture();
+    vi.mocked(client.chat.update).mockImplementation(
+      () => new Promise(() => {}) as ReturnType<SlackWebClientLike['chat']['update']>,
+    );
+
+    const renderer = new SlackRenderer(createTestLogger(), undefined, { operationTimeoutMs: 50 });
+    const pending = renderer.finalizeThreadProgressMessage(
+      client,
+      'C1',
+      'thread-ts',
+      'progress-ts',
+    );
+    const expectation = expect(pending).rejects.toBeInstanceOf(SlackRenderTimeoutError);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    await expectation;
   });
 });

@@ -1,8 +1,6 @@
 import type {
   AgentActivityState,
   AgentExecutionEvent,
-  AgentPermissionRequest,
-  AgentPermissionResponse,
   AgentUserInputQuestion,
   AgentUserInputRequest,
   AgentUserInputResponse,
@@ -16,7 +14,6 @@ import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 
-import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -30,7 +27,6 @@ export interface ActivitySinkOptions {
   sessionStore: SessionStore;
   threadTs: string;
   userId?: string;
-  permissionBridge?: SlackPermissionBridge;
   userInputBridge?: SlackUserInputBridge;
   workspaceLabel?: string;
 }
@@ -38,12 +34,6 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
-  requestPermission?: (
-    request: AgentPermissionRequest,
-    options?: {
-      signal?: AbortSignal | undefined;
-    },
-  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {
@@ -71,7 +61,6 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     sessionStore,
     threadTs,
     userId,
-    permissionBridge,
     userInputBridge,
     workspaceLabel,
   } = options;
@@ -93,6 +82,18 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   const defaultThinkingState = createDefaultThinkingState(threadTs);
   const defaultThinkingStateKey = JSON.stringify(defaultThinkingState);
+
+  const safeRender = async <T>(
+    label: string,
+    operation: () => Promise<T>,
+  ): Promise<T | undefined> => {
+    try {
+      return await operation();
+    } catch (error) {
+      logger.warn('Failed to %s: %s', label, String(error));
+      return undefined;
+    }
+  };
 
   const isMeaningfulActivityState = (state: AgentActivityState): boolean => {
     if (state.clear) return false;
@@ -124,16 +125,23 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
   const updateInFlightIndicator = async (state: AgentActivityState): Promise<void> => {
     if (progressMessageActive) {
-      progressMessageTs = await renderer.upsertThreadProgressMessage(
-        client,
-        channel,
-        threadTs,
-        toRendererState(state),
-        progressMessageTs,
+      const nextProgressMessageTs = await safeRender('update thread progress message', () =>
+        renderer.upsertThreadProgressMessage(
+          client,
+          channel,
+          threadTs,
+          toRendererState(state),
+          progressMessageTs,
+        ),
       );
+      if (nextProgressMessageTs) {
+        progressMessageTs = nextProgressMessageTs;
+      }
       return;
     }
-    await renderer.setUiState(client, channel, toRendererState(state));
+    await safeRender('set Slack UI state', () =>
+      renderer.setUiState(client, channel, toRendererState(state)),
+    );
   };
 
   const activateProgressMessage = async (state: AgentActivityState): Promise<void> => {
@@ -143,23 +151,32 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         logger.warn('Failed to clear fallback Slack thinking indicator: %s', String(error));
       });
     }
-    progressMessageTs = await renderer.upsertThreadProgressMessage(
-      client,
-      channel,
-      threadTs,
-      toRendererState(state),
-      progressMessageTs,
+    const nextProgressMessageTs = await safeRender('activate thread progress message', () =>
+      renderer.upsertThreadProgressMessage(
+        client,
+        channel,
+        threadTs,
+        toRendererState(state),
+        progressMessageTs,
+      ),
     );
+    if (nextProgressMessageTs) {
+      progressMessageTs = nextProgressMessageTs;
+    }
   };
 
   const handleAssistantMessage = async (text: string): Promise<void> => {
     // Only include toolbar (workspaceLabel + toolHistory) on the first message of each turn
     const includeToolbar = !hasSentToolbarInTurn;
-    await renderer.postThreadReply(client, channel, threadTs, text, {
-      ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
-      ...(includeToolbar && toolHistory.size > 0 ? { toolHistory } : {}),
-    });
-    hasSentToolbarInTurn = true;
+    try {
+      await renderer.postThreadReply(client, channel, threadTs, text, {
+        ...(includeToolbar && workspaceLabel ? { workspaceLabel } : {}),
+        ...(includeToolbar && toolHistory.size > 0 ? { toolHistory } : {}),
+      });
+      hasSentToolbarInTurn = true;
+    } catch (error) {
+      logger.warn('Failed to post assistant thread reply: %s', String(error));
+    }
     if (pendingGeneratedFiles.length > 0) {
       const batch = [...pendingGeneratedFiles];
       try {
@@ -241,12 +258,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
 
     if (state.clear) {
       if (progressMessageActive && progressMessageTs) {
-        await renderer.deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs);
+        await safeRender('delete thread progress message', () =>
+          renderer.deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs),
+        );
         progressMessageTs = undefined;
         progressMessageActive = false;
         return;
       }
-      await renderer.clearUiState(client, channel, threadTs);
+      await safeRender('clear Slack UI state', () => renderer.clearUiState(client, channel, threadTs));
       return;
     }
 
@@ -274,7 +293,9 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
       terminalPhase = 'stopped';
       terminalStopReason = event.reason;
       if (event.reason !== 'superseded' && !progressMessageTs) {
-        await renderer.postThreadReply(client, channel, threadTs, '_Stopped by user._');
+        await safeRender('post stopped-by-user reply', () =>
+          renderer.postThreadReply(client, channel, threadTs, '_Stopped by user._'),
+        );
       }
       return;
     }
@@ -288,61 +309,19 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
         threadTs,
         redact(String(event.error ?? '')),
       );
-      await renderer.postThreadReply(
-        client,
-        channel,
-        threadTs,
-        'An error occurred while processing your request.',
+      await safeRender('post execution failure reply', () =>
+        renderer.postThreadReply(
+          client,
+          channel,
+          threadTs,
+          'An error occurred while processing your request.',
+        ),
       );
     }
   };
 
   return {
     toolHistory,
-    ...(permissionBridge
-      ? {
-          requestPermission: async (
-            request: AgentPermissionRequest,
-            requestOptions?: {
-              signal?: AbortSignal | undefined;
-            },
-          ): Promise<AgentPermissionResponse> => {
-            await renderer
-              .setUiState(client, channel, {
-                threadTs,
-                status: 'Awaiting permission...',
-                loadingMessages: [
-                  truncateForSlackUi(`Waiting for approval for ${request.toolName}...`, 50),
-                  ...(request.description ? [truncateForSlackUi(request.description, 50)] : []),
-                ],
-                clear: false,
-              })
-              .catch((error) => {
-                logger.warn('Failed to publish permission waiting UI state: %s', String(error));
-              });
-
-            const defaultState = createDefaultThinkingState(threadTs);
-            try {
-              return await permissionBridge.requestPermission(client, {
-                channelId: channel,
-                description: request.description,
-                expectedUserId: userId,
-                input: request.input,
-                signal: requestOptions?.signal,
-                threadTs,
-                toolName: request.toolName,
-              });
-            } finally {
-              await renderer.setUiState(client, channel, {
-                threadTs: defaultState.threadTs,
-                status: defaultState.status,
-                loadingMessages: defaultState.activities,
-                clear: false,
-              });
-            }
-          },
-        }
-      : {}),
     ...(userInputBridge
       ? {
           requestUserInput: async (
@@ -359,26 +338,30 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
             const annotations: NonNullable<AgentUserInputResponse['annotations']> = {};
 
             for (const [index, question] of request.questions.entries()) {
-              await renderer.setUiState(client, channel, {
-                threadTs,
-                status: 'Waiting for your reply...',
-                loadingMessages: [
-                  requestOptions?.title ?? 'Waiting for your reply in Slack...',
-                  truncateForSlackUi(question.question),
-                ],
-                clear: false,
-              });
-              await renderer.postThreadReply(
-                client,
-                channel,
-                threadTs,
-                formatUserInputQuestionMessage(question, {
-                  currentIndex: index + 1,
-                  description: requestOptions?.description,
-                  displayName: requestOptions?.displayName,
-                  title: requestOptions?.title,
-                  totalQuestions: request.questions.length,
+              await safeRender('set waiting-for-user-input UI state', () =>
+                renderer.setUiState(client, channel, {
+                  threadTs,
+                  status: 'Waiting for your reply...',
+                  loadingMessages: [
+                    requestOptions?.title ?? 'Waiting for your reply in Slack...',
+                    truncateForSlackUi(question.question),
+                  ],
+                  clear: false,
                 }),
+              );
+              await safeRender('post user input question', () =>
+                renderer.postThreadReply(
+                  client,
+                  channel,
+                  threadTs,
+                  formatUserInputQuestionMessage(question, {
+                    currentIndex: index + 1,
+                    description: requestOptions?.description,
+                    displayName: requestOptions?.displayName,
+                    title: requestOptions?.title,
+                    totalQuestions: request.questions.length,
+                  }),
+                ),
               );
 
               const reply = await userInputBridge.awaitAnswer({
@@ -395,12 +378,14 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
             }
 
             const defaultState = createDefaultThinkingState(threadTs);
-            await renderer.setUiState(client, channel, {
-              threadTs: defaultState.threadTs,
-              status: defaultState.status,
-              loadingMessages: defaultState.activities,
-              clear: false,
-            });
+            await safeRender('restore default thinking UI state', () =>
+              renderer.setUiState(client, channel, {
+                threadTs: defaultState.threadTs,
+                status: defaultState.status,
+                loadingMessages: defaultState.activities,
+                clear: false,
+              }),
+            );
 
             return {
               answers,

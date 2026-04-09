@@ -25,12 +25,31 @@ const DEFAULT_LOADING_MESSAGES = [
 ] as const;
 
 const DEFAULT_PROGRESS_STATUS = 'Working on your request...';
+const DEFAULT_SLACK_OPERATION_TIMEOUT_MS = 15_000;
+
+export class SlackRenderTimeoutError extends Error {
+  constructor(
+    action: string,
+    context: string,
+    timeoutMs: number,
+  ) {
+    super(`Slack render ${action} timed out after ${timeoutMs}ms (${context})`);
+    this.name = 'SlackRenderTimeoutError';
+  }
+}
 
 export class SlackRenderer {
+  private readonly operationTimeoutMs: number;
+
   constructor(
     private readonly logger: AppLogger,
     private readonly statusProbe?: SlackStatusProbe,
-  ) {}
+    options?: {
+      operationTimeoutMs?: number | undefined;
+    },
+  ) {
+    this.operationTimeoutMs = options?.operationTimeoutMs ?? DEFAULT_SLACK_OPERATION_TIMEOUT_MS;
+  }
 
   async addAcknowledgementReaction(
     client: SlackWebClientLike,
@@ -472,7 +491,11 @@ export class SlackRenderer {
     const startedAt = Date.now();
     this.logger.info('Slack render %s started (%s)', action, context);
     try {
-      const result = await operation();
+      const result = await withTimeout(
+        operation(),
+        this.operationTimeoutMs,
+        () => new SlackRenderTimeoutError(action, context, this.operationTimeoutMs),
+      );
       this.logger.info(
         'Slack render %s completed in %dms (%s)',
         action,
@@ -593,6 +616,28 @@ export class SlackRenderer {
     }
 
     return fileId;
+  }
+}
+
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  createTimeoutError: () => Error,
+): Promise<T> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(createTimeoutError());
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 

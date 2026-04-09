@@ -190,6 +190,32 @@ describe('createActivitySink', () => {
     expect(sink.toolHistory.get('Reading')).toBe(2);
   });
 
+  it('does not block execution when progress message updates fail', async () => {
+    const renderer = createRendererStub();
+    vi.mocked(renderer.upsertThreadProgressMessage).mockRejectedValue(new Error('slack hung'));
+
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await expect(
+      sink.onEvent({
+        type: 'activity-state',
+        state: {
+          threadTs: 'ts1',
+          status: 'Reading files...',
+          activities: ['Reading src/index.ts...'],
+          clear: false,
+        },
+      }),
+    ).resolves.toBeUndefined();
+  });
+
   it('counts repeated tool calls when activity reappears after disappearing', async () => {
     const renderer = createRendererStub();
     const sink = createActivitySink({
@@ -641,144 +667,6 @@ describe('createActivitySink', () => {
       'ts1',
       'Third message',
       {},
-    );
-  });
-
-
-  it('truncates permission waiting UI messages to Slack limits', async () => {
-    const renderer = createRendererStub();
-    const permissionBridge = {
-      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
-    };
-    const sink = createActivitySink({
-      channel: 'C123',
-      client: createMockClient(),
-      logger: createTestLogger(),
-      permissionBridge: permissionBridge as any,
-      renderer,
-      sessionStore: createMockSessionStore(),
-      threadTs: 'ts1',
-    });
-
-    await expect(
-      sink.requestPermission?.({
-        toolName: 'mcp__slack-ui__save_memory',
-        input: { category: 'context', content: 'hello' },
-      }),
-    ).resolves.toEqual({ allowed: true });
-
-    expect(renderer.setUiState).toHaveBeenCalledWith(
-      expect.anything(),
-      'C123',
-      expect.objectContaining({
-        threadTs: 'ts1',
-        status: 'Awaiting permission...',
-        loadingMessages: expect.arrayContaining([expect.any(String)]),
-      }),
-    );
-
-    const firstCall = vi.mocked(renderer.setUiState).mock.calls[0]?.[2];
-    expect(firstCall?.loadingMessages?.[0]?.length).toBeLessThanOrEqual(50);
-    expect(permissionBridge.requestPermission).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        channelId: 'C123',
-        expectedUserId: undefined,
-        threadTs: 'ts1',
-        toolName: 'mcp__slack-ui__save_memory',
-      }),
-    );
-  });
-
-  it('still requests permission when Slack UI status update fails', async () => {
-    const renderer = createRendererStub();
-    vi.mocked(renderer.setUiState).mockRejectedValueOnce(
-      new Error('bolt-app must be less than 51 characters'),
-    );
-    const logger = createTestLogger();
-    const permissionBridge = {
-      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
-    };
-    const sink = createActivitySink({
-      channel: 'C123',
-      client: createMockClient(),
-      logger,
-      permissionBridge: permissionBridge as any,
-      renderer,
-      sessionStore: createMockSessionStore(),
-      threadTs: 'ts1',
-    });
-
-    await expect(
-      sink.requestPermission?.({
-        toolName: 'mcp__slack-ui__save_memory',
-        input: { category: 'context', content: 'hello' },
-      }),
-    ).resolves.toEqual({ allowed: true });
-
-    expect(permissionBridge.requestPermission).toHaveBeenCalledTimes(1);
-    expect(logger.warn).toHaveBeenCalledWith(
-      'Failed to publish permission waiting UI state: %s',
-      'Error: bolt-app must be less than 51 characters',
-    );
-  });
-
-  it('passes the thread user id as expected approver when present', async () => {
-    const renderer = createRendererStub();
-    const permissionBridge = {
-      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
-    };
-    const sink = createActivitySink({
-      channel: 'C123',
-      client: createMockClient(),
-      logger: createTestLogger(),
-      permissionBridge: permissionBridge as any,
-      renderer,
-      sessionStore: createMockSessionStore(),
-      threadTs: 'ts1',
-      userId: 'U123',
-    });
-
-    await sink.requestPermission?.({
-      toolName: 'mcp__slack-ui__save_memory',
-      input: { category: 'context', content: 'hello' },
-    });
-
-    expect(permissionBridge.requestPermission).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({
-        expectedUserId: 'U123',
-      }),
-    );
-  });
-
-  it('restores the default UI state even when permission request rejects', async () => {
-    const renderer = createRendererStub();
-    const permissionBridge = {
-      requestPermission: vi.fn().mockRejectedValue(new Error('permission request aborted')),
-    };
-    const sink = createActivitySink({
-      channel: 'C123',
-      client: createMockClient(),
-      logger: createTestLogger(),
-      permissionBridge: permissionBridge as any,
-      renderer,
-      sessionStore: createMockSessionStore(),
-      threadTs: 'ts1',
-    });
-
-    await expect(
-      sink.requestPermission?.({
-        toolName: 'mcp__slack-ui__save_memory',
-        input: { category: 'context', content: 'hello' },
-      }),
-    ).rejects.toThrow('permission request aborted');
-
-    expect(vi.mocked(renderer.setUiState).mock.calls.at(-1)?.[2]).toEqual(
-      expect.objectContaining({
-        threadTs: 'ts1',
-        status: 'Thinking...',
-      }),
     );
   });
 
