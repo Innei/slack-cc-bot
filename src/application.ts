@@ -19,7 +19,6 @@ import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
-import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
 import { WorkspaceResolver } from '~/workspace/resolver.js';
 
@@ -52,7 +51,6 @@ export function createApplication(): RuntimeApplication {
     ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
     : undefined;
   const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
-  const permissionBridge = new SlackPermissionBridge(logger.withTag('slack:permission'));
 
   const ccExecutor = new ClaudeAgentSdkExecutor(
     logger.withTag('claude:session'),
@@ -64,7 +62,9 @@ export function createApplication(): RuntimeApplication {
     new Map([['claude-code', ccExecutor]]),
   );
 
-  const threadExecutionRegistry = createThreadExecutionRegistry();
+  const threadExecutionRegistry = createThreadExecutionRegistry({
+    logger: logger.withTag('slack:execution'),
+  });
 
   const slackApp: App = createSlackApp({
     analyticsStore,
@@ -73,7 +73,6 @@ export function createApplication(): RuntimeApplication {
     sessionStore,
     providerRegistry,
     threadExecutionRegistry,
-    permissionBridge,
     userInputBridge,
     workspaceResolver,
     ...(statusProbe ? { statusProbe } : {}),

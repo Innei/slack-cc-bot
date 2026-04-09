@@ -1,3 +1,5 @@
+import type { AppLogger } from '~/logger/index.js';
+
 export type ThreadExecutionStopReason = 'superseded' | 'user_stop';
 
 export interface RegisteredThreadExecution {
@@ -25,7 +27,10 @@ export interface ThreadExecutionRegistry {
   trackMessage: (messageTs: string, threadTs: string) => void;
 }
 
-export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
+export function createThreadExecutionRegistry(options?: {
+  logger?: AppLogger | undefined;
+}): ThreadExecutionRegistry {
+  const logger = options?.logger;
   const byThread = new Map<string, Map<string, RegisteredThreadExecution>>();
   const stoppingByThread = new Map<string, Promise<StopAllResult>>();
   const messageToThread = new Map<string, string>();
@@ -83,10 +88,16 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
   return {
     claimMessage(messageTs, threadTs) {
       if (messageToThread.has(messageTs)) {
+        logger?.info(
+          'Thread execution registry rejected duplicate claim for message %s in thread %s',
+          messageTs,
+          threadTs,
+        );
         return false;
       }
 
       rememberMessage(messageTs, threadTs);
+      logger?.info('Thread execution registry claimed message %s for thread %s', messageTs, threadTs);
       return true;
     },
 
@@ -103,11 +114,24 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
         byThread.set(execution.threadTs, bucket);
       }
       bucket.set(execution.executionId, execution);
+      logger?.info(
+        'Thread execution registry registered execution %s for thread %s (provider=%s active=%d)',
+        execution.executionId,
+        execution.threadTs,
+        execution.providerId,
+        bucket.size,
+      );
 
       return () => {
         const b = byThread.get(execution.threadTs);
         if (!b) return;
         b.delete(execution.executionId);
+        logger?.info(
+          'Thread execution registry released execution %s for thread %s (remaining=%d)',
+          execution.executionId,
+          execution.threadTs,
+          b.size,
+        );
         if (b.size === 0) {
           byThread.delete(execution.threadTs);
         }
@@ -116,49 +140,107 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
 
     trackMessage(messageTs, threadTs) {
       rememberMessage(messageTs, threadTs);
+      logger?.info('Thread execution registry tracked message %s for thread %s', messageTs, threadTs);
     },
 
     async stopByMessage(messageTs, reason) {
       if (byThread.has(messageTs)) {
+        logger?.info(
+          'Thread execution registry resolved stopByMessage directly to thread %s (reason=%s)',
+          messageTs,
+          reason,
+        );
         return this.stopAll(messageTs, reason);
       }
       const threadTs = messageToThread.get(messageTs);
       if (threadTs) {
+        logger?.info(
+          'Thread execution registry resolved message %s to thread %s for stopByMessage (reason=%s)',
+          messageTs,
+          threadTs,
+          reason,
+        );
         return this.stopAll(threadTs, reason);
       }
+      logger?.info(
+        'Thread execution registry found no execution for message %s during stopByMessage (reason=%s)',
+        messageTs,
+        reason,
+      );
       return { failed: 0, stopped: 0 };
     },
 
     async stopAll(threadTs, reason) {
       const inFlightStop = stoppingByThread.get(threadTs);
       if (inFlightStop) {
+        logger?.info(
+          'Thread execution registry joined in-flight stopAll for thread %s (reason=%s)',
+          threadTs,
+          reason,
+        );
         return inFlightStop;
       }
 
       const stopPromise = (async () => {
         const bucket = byThread.get(threadTs);
         if (!bucket) {
+          logger?.info(
+            'Thread execution registry found no active executions for thread %s during stopAll (reason=%s)',
+            threadTs,
+            reason,
+          );
           return { failed: 0, stopped: 0 };
         }
         if (bucket.size === 0) {
           byThread.delete(threadTs);
+          logger?.info(
+            'Thread execution registry removed empty bucket for thread %s during stopAll (reason=%s)',
+            threadTs,
+            reason,
+          );
           return { failed: 0, stopped: 0 };
         }
 
         byThread.delete(threadTs);
         const executions = [...bucket.values()];
+        logger?.info(
+          'Thread execution registry stopAll started for thread %s with %d execution(s) (reason=%s)',
+          threadTs,
+          executions.length,
+          reason,
+        );
 
         let stopped = 0;
         let failed = 0;
         const failedExecutions: RegisteredThreadExecution[] = [];
 
         for (const execution of executions) {
+          const stopStartedAt = Date.now();
+          logger?.info(
+            'Stopping execution %s for thread %s (provider=%s reason=%s)',
+            execution.executionId,
+            threadTs,
+            execution.providerId,
+            reason,
+          );
           try {
             await execution.stop(reason);
             stopped += 1;
+            logger?.info(
+              'Stop signal completed for execution %s in thread %s in %dms',
+              execution.executionId,
+              threadTs,
+              Date.now() - stopStartedAt,
+            );
           } catch {
             failed += 1;
             failedExecutions.push(execution);
+            logger?.warn(
+              'Stop signal failed for execution %s in thread %s after %dms',
+              execution.executionId,
+              threadTs,
+              Date.now() - stopStartedAt,
+            );
           }
         }
 
@@ -167,7 +249,18 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
           .filter((e) => e.completionPromise && !failedExecutions.includes(e))
           .map((e) => e.completionPromise!.catch(() => {}));
         if (completionPromises.length > 0) {
+          const waitStartedAt = Date.now();
+          logger?.info(
+            'Waiting for %d completion promise(s) in thread %s after stopAll',
+            completionPromises.length,
+            threadTs,
+          );
           await Promise.allSettled(completionPromises);
+          logger?.info(
+            'Completion promises settled for thread %s in %dms',
+            threadTs,
+            Date.now() - waitStartedAt,
+          );
         }
 
         if (failedExecutions.length > 0) {
@@ -179,8 +272,20 @@ export function createThreadExecutionRegistry(): ThreadExecutionRegistry {
           for (const execution of failedExecutions) {
             restoreBucket.set(execution.executionId, execution);
           }
+          logger?.warn(
+            'Restored %d failed execution(s) back into registry for thread %s',
+            failedExecutions.length,
+            threadTs,
+          );
         }
 
+        logger?.info(
+          'Thread execution registry stopAll completed for thread %s (reason=%s stopped=%d failed=%d)',
+          threadTs,
+          reason,
+          stopped,
+          failed,
+        );
         return { failed, stopped };
       })().finally(() => {
         if (stoppingByThread.get(threadTs) === stopPromise) {

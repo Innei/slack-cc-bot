@@ -239,7 +239,6 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     logger: deps.logger,
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
-    ...(deps.permissionBridge ? { permissionBridge: deps.permissionBridge } : {}),
     threadTs,
     userId: message.user,
     userInputBridge: deps.userInputBridge,
@@ -269,6 +268,13 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     providerId: executor.providerId,
     startedAt,
     stop: async (reason?: ThreadExecutionStopReason) => {
+      runtimeInfo(
+        deps.logger,
+        'Abort requested for execution %s in thread %s (reason=%s)',
+        executionId,
+        threadTs,
+        reason ?? 'user_stop',
+      );
       releaseExecutionFromRegistry();
       controller.abort(reason ?? 'user_stop');
     },
@@ -281,9 +287,12 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
   try {
     runtimeInfo(
       deps.logger,
-      'Starting agent execution for thread %s (provider=%s)',
+      'Starting agent execution %s for thread %s (provider=%s resume=%s workspace=%s)',
+      executionId,
       threadTs,
       executor.providerId,
+      resumeHandle ?? 'none',
+      workspace?.workspaceLabel ?? '(none)',
     );
     await executor.execute(
       {
@@ -306,12 +315,13 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       },
       sink,
     );
-    runtimeInfo(deps.logger, 'Agent execution completed for thread %s', threadTs);
+    runtimeInfo(deps.logger, 'Agent execution %s completed for thread %s', executionId, threadTs);
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     runtimeError(
       deps.logger,
-      'Agent execution failed for thread %s: %s',
+      'Agent execution %s failed for thread %s: %s',
+      executionId,
       threadTs,
       redact(errorMessage),
     );
@@ -322,6 +332,13 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       'An error occurred while processing your request.',
     );
   } finally {
+    runtimeInfo(
+      deps.logger,
+      'Finalizing agent execution %s for thread %s (terminalPhase=%s)',
+      executionId,
+      threadTs,
+      sink.terminalPhase ?? 'unknown',
+    );
     releaseExecutionFromRegistry();
     await sink.finalize();
     if (ctx.options.addAcknowledgementReaction && sink.terminalPhase === 'completed') {
@@ -332,6 +349,12 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
         });
     }
     resolveExecutionDone!();
+    runtimeInfo(
+      deps.logger,
+      'Execution %s finalize completed for thread %s',
+      executionId,
+      threadTs,
+    );
   }
 
   return CONTINUE;

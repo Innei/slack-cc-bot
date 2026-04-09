@@ -407,6 +407,51 @@ describe('Slack loading status test', () => {
     });
   });
 
+  it('interrupts the Claude SDK query before finalizing an aborted execution', async () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-interrupt-'));
+    const repoPath = path.join(repoRoot, 'kagura');
+    fs.mkdirSync(path.join(repoPath, '.git'), { recursive: true });
+    const ac = new AbortController();
+    const logger = createTestLogger();
+    const executor = new ClaudeAgentSdkExecutor(logger, createMemoryStore());
+    const events: AgentExecutionEvent[] = [];
+    const interrupt = vi.fn(async () => {});
+
+    sdkMocks.query.mockImplementation(() =>
+      createInterruptiblePendingQuery(repoPath, {
+        interrupt,
+        sessionId: 'session-interrupt-test',
+      }),
+    );
+
+    const done = executor.execute(
+      {
+        ...createExecutionRequest(),
+        workspacePath: repoPath,
+        abortSignal: ac.signal,
+      },
+      {
+        onEvent: async (event) => {
+          events.push(event);
+        },
+      },
+    );
+
+    await vi.waitFor(() => {
+      expect(events.some((e) => e.type === 'lifecycle' && e.phase === 'started')).toBe(true);
+    });
+    ac.abort('superseded');
+    await done;
+
+    expect(interrupt).toHaveBeenCalledTimes(1);
+    expect(events).toContainEqual({
+      type: 'lifecycle',
+      phase: 'stopped',
+      reason: 'superseded',
+      resumeHandle: 'session-interrupt-test',
+    });
+  });
+
   it('resolves without failed lifecycle when publishing stopped throws', async () => {
     const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-root-abort-sink-'));
     const repoPath = path.join(repoRoot, 'kagura');
@@ -1115,4 +1160,52 @@ async function* createAbortAfterFirstMessageStream(
     }
     signal.addEventListener('abort', abortErr, { once: true });
   });
+}
+
+function createInterruptiblePendingQuery(
+  cwd: string,
+  options?: {
+    interrupt?: (() => Promise<void> | void) | undefined;
+    sessionId?: string | undefined;
+  },
+): AsyncIterable<unknown> & {
+  interrupt: () => Promise<void>;
+  return: () => Promise<IteratorResult<unknown>>;
+} {
+  let yieldedInit = false;
+  let resolvePending: ((value: IteratorResult<unknown>) => void) | undefined;
+  const pending = new Promise<IteratorResult<unknown>>((resolve) => {
+    resolvePending = resolve;
+  });
+
+  return {
+    [Symbol.asyncIterator]() {
+      return this;
+    },
+    async interrupt() {
+      await options?.interrupt?.();
+      resolvePending?.({ done: true, value: undefined });
+    },
+    async next() {
+      if (!yieldedInit) {
+        yieldedInit = true;
+        return {
+          done: false,
+          value: {
+            type: 'system',
+            subtype: 'init',
+            cwd,
+            model: 'claude-sonnet-test',
+            session_id: options?.sessionId ?? 'session-interrupt-test',
+          },
+        };
+      }
+
+      return pending;
+    },
+    async return() {
+      resolvePending?.({ done: true, value: undefined });
+      return { done: true, value: undefined };
+    },
+  };
 }

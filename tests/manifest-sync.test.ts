@@ -146,7 +146,9 @@ describe('syncSlashCommands with token rotation', () => {
             ],
           },
           settings: {
-            event_subscriptions: { bot_events: ['app_home_opened'] },
+            event_subscriptions: {
+              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+            },
           },
         },
       }),
@@ -213,7 +215,9 @@ describe('syncSlashCommands with token rotation', () => {
               ],
             },
             settings: {
-              event_subscriptions: { bot_events: ['app_home_opened'] },
+              event_subscriptions: {
+                bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+              },
             },
           },
         }),
@@ -357,7 +361,7 @@ describe('syncSlashCommands with token rotation', () => {
     expect(body.manifest.features.bot_user.always_online).toBe(true);
   });
 
-  it('skips update when all commands exist and always_online and home_tab are enabled', async () => {
+  it('skips update when all commands, shortcuts, and required bot events exist', async () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-noop-'));
     const tokenStorePath = path.join(tmpDir, 'tokens.json');
 
@@ -385,7 +389,9 @@ describe('syncSlashCommands with token rotation', () => {
             ],
           },
           settings: {
-            event_subscriptions: { bot_events: ['app_home_opened'] },
+            event_subscriptions: {
+              bot_events: ['app_home_opened', 'app_mention', 'message.channels', 'message.im'],
+            },
           },
         },
       }),
@@ -400,6 +406,60 @@ describe('syncSlashCommands with token rotation', () => {
     });
 
     expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('adds missing bot message events via manifest update', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-sync-missing-events-'));
+    const tokenStorePath = path.join(tmpDir, 'tokens.json');
+
+    fetchMock
+      .mockResolvedValueOnce(
+        slackOk({
+          manifest: {
+            features: {
+              app_home: { home_tab_enabled: true },
+              bot_user: { display_name: 'cc-001', always_online: true },
+              slash_commands: [
+                { command: '/usage', description: 'x' },
+                { command: '/workspace', description: 'x' },
+                { command: '/memory', description: 'x' },
+                { command: '/session', description: 'x' },
+                { command: '/provider', description: 'x' },
+                { command: '/version', description: 'x' },
+              ],
+              shortcuts: [
+                {
+                  name: 'Stop Reply',
+                  type: 'message',
+                  callback_id: 'stop_reply_action',
+                  description: 'x',
+                },
+              ],
+            },
+            settings: {
+              event_subscriptions: { bot_events: ['app_home_opened'] },
+            },
+          },
+        }),
+      )
+      .mockResolvedValueOnce(slackOk({}));
+
+    const logger = createTestLogger();
+    await syncSlashCommands({
+      appId: 'A123',
+      configToken: 'xoxe.xoxp-token',
+      logger,
+      tokenStorePath,
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const updateCall = fetchMock.mock.calls[1];
+    expect(updateCall).toBeDefined();
+    const [, updateInit] = updateCall as [string, RequestInit];
+    const body = JSON.parse(updateInit.body as string);
+    expect(body.manifest.settings.event_subscriptions.bot_events).toEqual(
+      expect.arrayContaining(['app_home_opened', 'app_mention', 'message.channels', 'message.im']),
+    );
   });
 
   it('enables always_online when bot_user has it disabled', async () => {

@@ -36,6 +36,7 @@ function isAbortError(error: unknown): boolean {
 }
 
 const execFileAsync = promisify(execFile);
+const ABORT_TEARDOWN_TIMEOUT_MS = 1_000;
 
 interface ClaudeAuthStatus {
   apiProvider?: string;
@@ -100,14 +101,98 @@ async function nextMessageOrAbort<T>(
 
 async function disposeAsyncIterator(
   iterator: AsyncIterator<SDKMessage> | undefined,
+  options?: {
+    executionId?: string | undefined;
+    logger?: AppLogger | undefined;
+    threadTs?: string | undefined;
+    timeoutMs?: number | undefined;
+  },
 ): Promise<void> {
   if (!iterator?.return) {
     return;
   }
   try {
-    await iterator.return();
+    const returnPromise = iterator.return();
+    const timeoutMs = options?.timeoutMs ?? ABORT_TEARDOWN_TIMEOUT_MS;
+    const startedAt = Date.now();
+    options?.logger?.info(
+      'Starting Claude SDK iterator teardown via return() (execution=%s thread=%s timeoutMs=%d)',
+      options.executionId ?? 'unknown',
+      options.threadTs ?? 'unknown',
+      timeoutMs,
+    );
+    const result = await Promise.race([
+      returnPromise.then(() => 'completed' as const),
+      new Promise<'timed_out'>((resolve) => {
+        setTimeout(() => resolve('timed_out'), timeoutMs);
+      }),
+    ]);
+    if (result === 'timed_out') {
+      options?.logger?.warn(
+        'Claude SDK iterator teardown timed out after %dms (execution=%s thread=%s)',
+        Date.now() - startedAt,
+        options.executionId ?? 'unknown',
+        options.threadTs ?? 'unknown',
+      );
+      return;
+    }
+    options?.logger?.info(
+      'Claude SDK iterator teardown completed in %dms (execution=%s thread=%s)',
+      Date.now() - startedAt,
+      options.executionId ?? 'unknown',
+      options.threadTs ?? 'unknown',
+    );
   } catch {
     /* ignore teardown errors */
+  }
+}
+
+async function interruptQuery(
+  session: ReturnType<typeof query> | undefined,
+  logger: AppLogger,
+  threadTs: string,
+  executionId: string,
+): Promise<void> {
+  if (!session) {
+    return;
+  }
+
+  try {
+    const startedAt = Date.now();
+    logger.info(
+      'Interrupting Claude SDK query (execution=%s thread=%s timeoutMs=%d)',
+      executionId,
+      threadTs,
+      ABORT_TEARDOWN_TIMEOUT_MS,
+    );
+    const result = await Promise.race([
+      session.interrupt().then(() => 'completed' as const),
+      new Promise<'timed_out'>((resolve) => {
+        setTimeout(() => resolve('timed_out'), ABORT_TEARDOWN_TIMEOUT_MS);
+      }),
+    ]);
+    if (result === 'timed_out') {
+      logger.warn(
+        'Claude SDK interrupt timed out after %dms (execution=%s thread=%s)',
+        Date.now() - startedAt,
+        executionId,
+        threadTs,
+      );
+      return;
+    }
+    logger.info(
+      'Claude SDK interrupt completed in %dms (execution=%s thread=%s)',
+      Date.now() - startedAt,
+      executionId,
+      threadTs,
+    );
+  } catch (error) {
+    logger.warn(
+      'Failed to interrupt Claude SDK query during abort (execution=%s thread=%s): %s',
+      executionId,
+      threadTs,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
@@ -145,8 +230,16 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     request: AgentExecutionRequest,
     sink: AgentExecutionSink,
   ): Promise<void> {
-    this.logger.info('Claude Agent SDK execution requested for thread %s', request.threadTs);
     const probeExecutionId = request.executionId ?? 'unknown';
+    this.logger.info(
+      'Claude Agent SDK execution requested (execution=%s thread=%s channel=%s user=%s resume=%s cwd=%s)',
+      probeExecutionId,
+      request.threadTs,
+      request.channelId,
+      request.userId,
+      request.resumeHandle ?? 'none',
+      request.workspacePath ?? '(none)',
+    );
     await this.recordExecutionProbe({
       executionId: probeExecutionId,
       kind: 'request',
@@ -165,9 +258,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     const { systemPrompt, userPrompt } = createClaudePromptInput(request);
 
     this.logger.info(
-      'Creating Claude SDK query (thread %s, model=%s, permissionMode=%s, resume=%s, cwd=%s)',
+      'Creating Claude SDK query (execution=%s thread=%s model=%s maxTurns=%d permissionMode=%s resume=%s cwd=%s)',
+      probeExecutionId,
       request.threadTs,
       env.CLAUDE_MODEL ?? 'default',
+      env.CLAUDE_MAX_TURNS,
       env.CLAUDE_PERMISSION_MODE,
       request.resumeHandle ?? 'none',
       request.workspacePath ?? '(none)',
@@ -183,6 +278,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           agentProgressSummaries: true,
           includeHookEvents: true,
           includePartialMessages: true,
+          maxTurns: env.CLAUDE_MAX_TURNS,
           ...(request.workspacePath ? { cwd: request.workspacePath } : {}),
           systemPrompt,
           mcpServers: {
@@ -197,11 +293,16 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           ...(request.resumeHandle ? { resume: request.resumeHandle } : {}),
         },
       });
-      this.logger.info('Claude SDK query created (thread %s)', request.threadTs);
+      this.logger.info(
+        'Claude SDK query created (execution=%s thread=%s)',
+        probeExecutionId,
+        request.threadTs,
+      );
     } catch (error) {
       const message = this.describeUnknownError(error);
       this.logger.error(
-        'Failed to create Claude SDK query (thread %s): %s',
+        'Failed to create Claude SDK query (execution=%s thread=%s): %s',
+        probeExecutionId,
         request.threadTs,
         message,
       );
@@ -254,7 +355,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       });
 
       let firstMessage = true;
-      this.logger.info('Waiting for Claude SDK output (thread %s)...', request.threadTs);
+      this.logger.info(
+        'Waiting for Claude SDK output (execution=%s thread=%s)...',
+        probeExecutionId,
+        request.threadTs,
+      );
 
       iterator = (session as AsyncIterable<SDKMessage>)[Symbol.asyncIterator]();
       for (;;) {
@@ -266,7 +371,8 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         if (firstMessage) {
           firstMessage = false;
           this.logger.info(
-            'First Claude SDK message (thread %s, type=%s)',
+            'First Claude SDK message (execution=%s thread=%s type=%s)',
+            probeExecutionId,
             request.threadTs,
             message.type,
           );
@@ -275,7 +381,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         await handleClaudeSdkMessage(this.logger, message, sink, handlers);
       }
 
-      this.logger.info('Claude SDK message stream ended (thread %s)', request.threadTs);
+      this.logger.info(
+        'Claude SDK message stream ended (execution=%s thread=%s)',
+        probeExecutionId,
+        request.threadTs,
+      );
       await this.extractAndSaveImplicitMemories(request, collectedAssistantTexts.join('\n'));
 
       await sink.onEvent({
@@ -296,11 +406,17 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         const stopReason =
           request.abortSignal?.reason === 'superseded' ? 'superseded' : 'user_stop';
         this.logger.info(
-          'Claude Agent SDK execution stopped (reason=%s, thread %s)',
+          'Claude Agent SDK execution stopped (execution=%s reason=%s thread=%s)',
+          probeExecutionId,
           stopReason,
           request.threadTs,
         );
-        await disposeAsyncIterator(iterator);
+        await interruptQuery(session, this.logger, request.threadTs, probeExecutionId);
+        await disposeAsyncIterator(iterator, {
+          executionId: probeExecutionId,
+          logger: this.logger,
+          threadTs: request.threadTs,
+        });
         try {
           await sink.onEvent({
             type: 'lifecycle',
@@ -320,7 +436,8 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         } catch (publishError) {
           const msg = this.describeUnknownError(publishError);
           this.logger.warn(
-            'Failed to publish stopped lifecycle (thread %s): %s',
+            'Failed to publish stopped lifecycle (execution=%s thread=%s): %s',
+            probeExecutionId,
             request.threadTs,
             redact(msg),
           );
@@ -328,7 +445,12 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         return;
       }
       const errorMessage = this.describeUnknownError(error);
-      this.logger.error('Claude Agent SDK execution failed: %s', redact(errorMessage));
+      this.logger.error(
+        'Claude Agent SDK execution failed (execution=%s thread=%s): %s',
+        probeExecutionId,
+        request.threadTs,
+        redact(errorMessage),
+      );
       await sink.onEvent({
         type: 'lifecycle',
         phase: 'failed',

@@ -1,7 +1,7 @@
 import type { AssistantThreadStartedMiddleware, AssistantUserMessageMiddleware } from '@slack/bolt';
 
 import { redact } from '~/logger/redact.js';
-import { runtimeError, runtimeWarn } from '~/logger/runtime.js';
+import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import { zodParse } from '~/schemas/safe-parse.js';
 import { SlackAppMentionEventSchema } from '~/schemas/slack/app-mention-event.js';
 import { SlackMessageSchema } from '~/schemas/slack/message.js';
@@ -72,6 +72,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const client = args.client as SlackWebClientLike;
 
     if (!threadTs) {
+      runtimeInfo(deps.logger, 'Ignoring message event %s because it is not a thread reply', message.ts);
       return;
     }
 
@@ -93,6 +94,12 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
 
     const session = deps.sessionStore.get(threadTs);
     if (!session) {
+      runtimeWarn(
+        deps.logger,
+        'Ignoring thread reply %s in thread %s because no persisted session was found',
+        message.ts,
+        threadTs,
+      );
       return;
     }
 
@@ -124,6 +131,12 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const botUserId = await getBotUserId(client);
     const senderId = message.user?.trim() || message.bot_id?.trim();
     if (!senderId) {
+      runtimeWarn(
+        deps.logger,
+        'Ignoring thread reply %s in thread %s because sender id is missing',
+        message.ts,
+        threadTs,
+      );
       return;
     }
 

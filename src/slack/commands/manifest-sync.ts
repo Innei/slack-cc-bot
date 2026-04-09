@@ -114,6 +114,13 @@ const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
   },
 ];
 
+const DESIRED_BOT_EVENTS = [
+  'app_home_opened',
+  'app_mention',
+  'message.channels',
+  'message.im',
+] as const;
+
 export interface ManifestSyncOptions {
   appId: string;
   configToken?: string | undefined;
@@ -158,9 +165,9 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   const appHome = currentManifest.features?.app_home;
   const needsHomeTab = !appHome?.home_tab_enabled;
 
-  // Ensure app_home_opened event is subscribed
+  // Ensure required bot events are subscribed
   const existingBotEvents = currentManifest.settings?.event_subscriptions?.bot_events ?? [];
-  const needsHomeEvent = !existingBotEvents.includes('app_home_opened');
+  const missingBotEvents = DESIRED_BOT_EVENTS.filter((event) => !existingBotEvents.includes(event));
 
   // Remove /stop if still present in manifest (replaced by reaction + shortcut)
   const commandsToKeep = (
@@ -174,10 +181,10 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
     missingShortcuts.length === 0 &&
     !needsAlwaysOnline &&
     !needsHomeTab &&
-    !needsHomeEvent
+    missingBotEvents.length === 0
   ) {
     logger.info(
-      'All %d slash commands and %d shortcuts already registered, bot always_online and home_tab are enabled',
+      'All %d slash commands and %d shortcuts already registered, bot always_online, home_tab, and required bot events are enabled',
       DESIRED_COMMANDS.length,
       DESIRED_SHORTCUTS.length,
     );
@@ -204,14 +211,16 @@ export async function syncSlashCommands(options: ManifestSyncOptions): Promise<v
   if (needsHomeTab) {
     logger.info('Enabling app_home.home_tab_enabled for Home tab');
   }
-  if (needsHomeEvent) {
-    logger.info('Adding app_home_opened to bot_events for Home tab updates');
+  if (missingBotEvents.length > 0) {
+    logger.info('Adding missing bot events: %s', missingBotEvents.join(', '));
   }
 
-  // Build updated bot_events list if needed
-  const updatedBotEvents = needsHomeEvent
-    ? [...existingBotEvents, 'app_home_opened']
-    : existingBotEvents;
+  const updatedBotEvents = [...existingBotEvents];
+  for (const event of missingBotEvents) {
+    if (!updatedBotEvents.includes(event)) {
+      updatedBotEvents.push(event);
+    }
+  }
 
   const updatedManifest: SlackManifest = {
     ...currentManifest,

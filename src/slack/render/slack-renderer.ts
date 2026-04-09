@@ -98,12 +98,17 @@ export class SlackRenderer {
       return;
     }
 
-    await client.assistant.threads.setStatus({
-      channel_id: channelId,
-      thread_ts: state.threadTs,
-      status: state.status ?? '',
-      ...(state.loadingMessages ? { loading_messages: state.loadingMessages } : {}),
-    });
+    await this.withSlackTiming(
+      'assistant.threads.setStatus',
+      `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(state.status ?? '')} loadingMessages=${state.loadingMessages?.length ?? 0}`,
+      async () =>
+        client.assistant.threads.setStatus({
+          channel_id: channelId,
+          thread_ts: state.threadTs,
+          status: state.status ?? '',
+          ...(state.loadingMessages ? { loading_messages: state.loadingMessages } : {}),
+        }),
+    );
     await this.statusProbe?.recordStatus({
       channelId,
       clear: false,
@@ -120,11 +125,16 @@ export class SlackRenderer {
     channelId: string,
     threadTs: string,
   ): Promise<void> {
-    await client.assistant.threads.setStatus({
-      channel_id: channelId,
-      thread_ts: threadTs,
-      status: '',
-    });
+    await this.withSlackTiming(
+      'assistant.threads.setStatus',
+      `channel=${channelId} thread=${threadTs} clear=true`,
+      async () =>
+        client.assistant.threads.setStatus({
+          channel_id: channelId,
+          thread_ts: threadTs,
+          status: '',
+        }),
+    );
     await this.statusProbe?.recordStatus({
       channelId,
       clear: true,
@@ -153,12 +163,17 @@ export class SlackRenderer {
     const blocks = this.buildProgressMessageBlocks(state);
 
     if (progressMessageTs) {
-      await client.chat.update({
-        channel: channelId,
-        ts: progressMessageTs,
-        text,
-        blocks,
-      });
+      await this.withSlackTiming(
+        'chat.update(progress)',
+        `channel=${channelId} thread=${threadTs} messageTs=${progressMessageTs} textLength=${text.length}`,
+        async () =>
+          client.chat.update({
+            channel: channelId,
+            ts: progressMessageTs,
+            text,
+            blocks,
+          }),
+      );
       await this.statusProbe?.recordProgressMessage({
         action: 'update',
         channelId,
@@ -171,12 +186,17 @@ export class SlackRenderer {
       return progressMessageTs;
     }
 
-    const response = await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text,
-      blocks,
-    });
+    const response = await this.withSlackTiming(
+      'chat.postMessage(progress)',
+      `channel=${channelId} thread=${threadTs} textLength=${text.length}`,
+      async () =>
+        client.chat.postMessage({
+          channel: channelId,
+          thread_ts: threadTs,
+          text,
+          blocks,
+        }),
+    );
 
     await this.statusProbe?.recordProgressMessage({
       action: 'post',
@@ -197,10 +217,15 @@ export class SlackRenderer {
     threadTs: string,
     progressMessageTs: string,
   ): Promise<void> {
-    await client.chat.delete({
-      channel: channelId,
-      ts: progressMessageTs,
-    });
+    await this.withSlackTiming(
+      'chat.delete(progress)',
+      `channel=${channelId} thread=${threadTs} messageTs=${progressMessageTs}`,
+      async () =>
+        client.chat.delete({
+          channel: channelId,
+          ts: progressMessageTs,
+        }),
+    );
     await this.statusProbe?.recordProgressMessage({
       action: 'delete',
       channelId,
@@ -227,12 +252,17 @@ export class SlackRenderer {
       },
     ];
 
-    await client.chat.update({
-      channel: channelId,
-      ts: progressMessageTs,
-      text,
-      blocks,
-    });
+    await this.withSlackTiming(
+      'chat.update(progress-finalize)',
+      `channel=${channelId} thread=${threadTs} messageTs=${progressMessageTs} textLength=${text.length}`,
+      async () =>
+        client.chat.update({
+          channel: channelId,
+          ts: progressMessageTs,
+          text,
+          blocks,
+        }),
+    );
     await this.statusProbe?.recordProgressMessage({
       action: 'finalize',
       channelId,
@@ -259,12 +289,17 @@ export class SlackRenderer {
       },
     ];
 
-    await client.chat.update({
-      channel: channelId,
-      ts: progressMessageTs,
-      text,
-      blocks,
-    });
+    await this.withSlackTiming(
+      'chat.update(progress-stopped)',
+      `channel=${channelId} thread=${threadTs} messageTs=${progressMessageTs} textLength=${text.length}`,
+      async () =>
+        client.chat.update({
+          channel: channelId,
+          ts: progressMessageTs,
+          text,
+          blocks,
+        }),
+    );
     await this.statusProbe?.recordProgressMessage({
       action: 'stopped',
       channelId,
@@ -320,13 +355,18 @@ export class SlackRenderer {
     }
 
     let lastTs: string | undefined;
-    for (const batch of batches) {
-      const response = await client.chat.postMessage({
-        channel: channelId,
-        thread_ts: threadTs,
-        text: batch.text,
-        blocks: batch.blocks,
-      });
+    for (const [index, batch] of batches.entries()) {
+      const response = await this.withSlackTiming(
+        'chat.postMessage(thread-reply)',
+        `channel=${channelId} thread=${threadTs} batch=${index + 1}/${batches.length} textLength=${batch.text.length}`,
+        async () =>
+          client.chat.postMessage({
+            channel: channelId,
+            thread_ts: threadTs,
+            text: batch.text,
+            blocks: batch.blocks,
+          }),
+      );
       lastTs = response.ts;
     }
 
@@ -349,18 +389,23 @@ export class SlackRenderer {
       }
 
       try {
-        await client.chat.postMessage({
-          blocks: [
-            {
-              alt_text: meta.fileName,
-              slack_file: { id: fileId },
-              type: 'image',
-            },
-          ],
-          channel: channelId,
-          text: meta.fileName,
-          thread_ts: threadTs,
-        });
+        await this.withSlackTiming(
+          'chat.postMessage(generated-image)',
+          `channel=${channelId} thread=${threadTs} file=${meta.fileName}`,
+          async () =>
+            client.chat.postMessage({
+              blocks: [
+                {
+                  alt_text: meta.fileName,
+                  slack_file: { id: fileId },
+                  type: 'image',
+                },
+              ],
+              channel: channelId,
+              text: meta.fileName,
+              thread_ts: threadTs,
+            }),
+        );
       } catch (error) {
         this.logger.warn(
           'Failed to post Slack image block for %s: %s',
@@ -401,17 +446,50 @@ export class SlackRenderer {
     const usageText = formatSessionUsageInfo(usage);
     if (!usageText) return;
 
-    await client.chat.postMessage({
-      channel: channelId,
-      thread_ts: threadTs,
-      text: usageText,
-      blocks: [
-        {
-          type: 'context',
-          elements: [{ type: 'mrkdwn', text: usageText }],
-        },
-      ],
-    });
+    await this.withSlackTiming(
+      'chat.postMessage(session-usage)',
+      `channel=${channelId} thread=${threadTs} textLength=${usageText.length}`,
+      async () =>
+        client.chat.postMessage({
+          channel: channelId,
+          thread_ts: threadTs,
+          text: usageText,
+          blocks: [
+            {
+              type: 'context',
+              elements: [{ type: 'mrkdwn', text: usageText }],
+            },
+          ],
+        }),
+    );
+  }
+
+  private async withSlackTiming<T>(
+    action: string,
+    context: string,
+    operation: () => Promise<T>,
+  ): Promise<T> {
+    const startedAt = Date.now();
+    this.logger.info('Slack render %s started (%s)', action, context);
+    try {
+      const result = await operation();
+      this.logger.info(
+        'Slack render %s completed in %dms (%s)',
+        action,
+        Date.now() - startedAt,
+        context,
+      );
+      return result;
+    } catch (error) {
+      this.logger.warn(
+        'Slack render %s failed after %dms (%s): %s',
+        action,
+        Date.now() - startedAt,
+        context,
+        String(error),
+      );
+      throw error;
+    }
   }
 
   private buildProgressMessageText(state: RendererUiState): string {
@@ -490,14 +568,19 @@ export class SlackRenderer {
 
     let response: SlackFilesUploadV2Response;
     try {
-      response = await client.files.uploadV2({
-        ...(kind === 'image' ? { alt_text: meta.fileName } : {}),
-        channel_id: channelId,
-        file: bytes,
-        filename: meta.fileName,
-        thread_ts: threadTs,
-        title: meta.fileName,
-      });
+      response = await this.withSlackTiming(
+        'files.uploadV2',
+        `channel=${channelId} thread=${threadTs} kind=${kind} file=${meta.fileName} bytes=${bytes.length}`,
+        async () =>
+          client.files.uploadV2({
+            ...(kind === 'image' ? { alt_text: meta.fileName } : {}),
+            channel_id: channelId,
+            file: bytes,
+            filename: meta.fileName,
+            thread_ts: threadTs,
+            title: meta.fileName,
+          }),
+      );
     } catch (error) {
       this.logger.warn('Failed to upload generated %s %s: %s', kind, meta.fileName, String(error));
       return undefined;
