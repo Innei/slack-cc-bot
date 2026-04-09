@@ -2,7 +2,6 @@ import {
   RECALL_MEMORY_TOOL_NAME,
   SAVE_MEMORY_TOOL_NAME,
   SLACK_ATTACHMENT_CAPABILITY_LINES,
-  SLACK_UI_STATE_TOOL_NAME,
   UPLOAD_SLACK_FILE_TOOL_NAME,
 } from '~/agent/slack-runtime-tools.js';
 import type { LoadedThreadFile } from '~/slack/context/thread-context-loader.js';
@@ -29,7 +28,6 @@ export const toolDeclarationProcessor: PromptProcessor = {
     ctx.systemParts.push(
       '',
       'Available tools:',
-      `- ${SLACK_UI_STATE_TOOL_NAME}: publish status/loading state updates to Slack UI.`,
       `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,

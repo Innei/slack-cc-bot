@@ -12,13 +12,7 @@ import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryScope, MemoryStore } from '~/memory/types.js';
 
 import { RecallMemoryToolInputSchema, SaveMemoryToolInputSchema } from './schemas/memory-tools.js';
-import { ClaudeUiStateToolInputShape } from './schemas/publish-state.js';
 import { UploadSlackFileToolInputSchema } from './schemas/upload-slack-file.js';
-import {
-  parseSlackUiStateToolInput,
-  SLACK_UI_STATE_TOOL_DESCRIPTION,
-  SLACK_UI_STATE_TOOL_NAME,
-} from './tools/publish-state.js';
 import {
   parseRecallMemoryToolInput,
   RECALL_MEMORY_TOOL_DESCRIPTION,
@@ -45,45 +39,11 @@ export function createAnthropicAgentSdkMcpServer(
   return createSdkMcpServer({
     name: 'slack-ui',
     tools: [
-      createPublishStateTool(logger, request, sink),
       createRecallMemoryTool(logger, memoryStore, request),
       createSaveMemoryTool(logger, memoryStore, request),
       createUploadSlackFileTool(logger, request, sink),
     ],
   });
-}
-
-function createPublishStateTool(
-  logger: AppLogger,
-  request: AgentExecutionRequest,
-  sink: AgentExecutionSink,
-) {
-  return tool(
-    SLACK_UI_STATE_TOOL_NAME,
-    SLACK_UI_STATE_TOOL_DESCRIPTION,
-    ClaudeUiStateToolInputShape,
-    async (args) => {
-      try {
-        const state = parseSlackUiStateToolInput({
-          ...args,
-          threadTs: request.threadTs,
-        });
-        await sink.onEvent({
-          type: 'activity-state',
-          state: {
-            threadTs: state.threadTs,
-            status: state.status,
-            activities: state.loadingMessages,
-            composing: state.composing,
-            clear: state.clear,
-          },
-        });
-        return createTextToolResult('UI state published.');
-      } catch (error) {
-        return createToolValidationErrorResult(logger, SLACK_UI_STATE_TOOL_NAME, error);
-      }
-    },
-  );
 }
 
 function createRecallMemoryTool(

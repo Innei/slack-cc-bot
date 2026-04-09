@@ -1,7 +1,3 @@
-export const SLACK_UI_STATE_TOOL_NAME = 'publish_state';
-export const SLACK_UI_STATE_TOOL_DESCRIPTION =
-  'Publish structured Slack UI state updates, including status text and rotating loading messages.';
-
 export const RECALL_MEMORY_TOOL_NAME = 'recall_memory';
 export const RECALL_MEMORY_TOOL_DESCRIPTION =
   'Retrieve memories from previous sessions. Supports both global (cross-workspace) and workspace-scoped memories.';
