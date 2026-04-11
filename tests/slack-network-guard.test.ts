@@ -85,6 +85,26 @@ describe('slack network guard', () => {
     vi.useRealTimers();
   });
 
+  it('enforces at least one startup attempt when maxAttempts is zero or negative', async () => {
+    const zeroStart = vi.fn<() => Promise<void>>().mockResolvedValueOnce();
+    const negativeStart = vi.fn<() => Promise<void>>().mockResolvedValueOnce();
+    const logger = { warn: vi.fn() } as any;
+
+    await expect(
+      startSlackAppWithRetry(zeroStart, logger, {
+        maxAttempts: 0,
+      }),
+    ).resolves.toBeUndefined();
+    await expect(
+      startSlackAppWithRetry(negativeStart, logger, {
+        maxAttempts: -3,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(zeroStart).toHaveBeenCalledTimes(1);
+    expect(negativeStart).toHaveBeenCalledTimes(1);
+  });
+
   it('does not retry non-transient startup failures', async () => {
     const start = vi.fn<() => Promise<void>>().mockRejectedValueOnce(new Error('invalid_auth'));
     const logger = { warn: vi.fn() } as any;

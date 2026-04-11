@@ -130,7 +130,7 @@ export async function startSlackAppWithRetry(
   options: SlackNetworkStartRetryOptions = {},
 ): Promise<void> {
   const resolvedOptions: Required<SlackNetworkStartRetryOptions> = {
-    maxAttempts: options.maxAttempts ?? 5,
+    maxAttempts: Math.max(1, options.maxAttempts ?? 5),
     baseDelayMs: options.baseDelayMs ?? 1_000,
     maxDelayMs: options.maxDelayMs ?? 30_000,
   };
