@@ -2,6 +2,7 @@ import type { Agent as HttpAgent } from 'node:http';
 import https from 'node:https';
 
 import type { AppLogger } from '~/logger/index.js';
+import { sleep } from '~/util/sleep.js';
 
 const TRANSIENT_NETWORK_ERROR_CODES = new Set([
   'ECONNRESET',
@@ -159,8 +160,3 @@ export async function startSlackAppWithRetry(
   }
 }
 
-async function sleep(ms: number): Promise<void> {
-  await new Promise((resolve) => {
-    setTimeout(resolve, ms);
-  });
-}
