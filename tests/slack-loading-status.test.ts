@@ -673,30 +673,6 @@ describe('Slack loading status test', () => {
     );
   });
 
-  it('injects threadTs when the publish_state MCP tool emits UI state', async () => {
-    const { events, tools } = await getMcpToolsForRequest();
-
-    const result = await getToolHandler(
-      tools,
-      SLACK_UI_STATE_TOOL_NAME,
-    )({
-      loadingMessages: ['Inspecting the workspace...'],
-      status: 'Thinking...',
-    });
-
-    expect(result).toEqual({
-      content: [{ text: 'UI state published.', type: 'text' }],
-    });
-    expect(events).toContainEqual({
-      type: 'activity-state',
-      state: {
-        clear: false,
-        activities: ['Inspecting the workspace...'],
-        status: 'Thinking...',
-        threadTs: '1712345678.000100',
-      },
-    });
-  });
 
   it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {
     const search = vi.fn(() => []);

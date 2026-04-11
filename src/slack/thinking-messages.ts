@@ -22,7 +22,7 @@ export const THINKING_STATUS_MESSAGES = [
 ] as const;
 
 export function rotateThinkingStatus(index: number): string {
-  return THINKING_STATUS_MESSAGES[index % THINKING_STATUS_MESSAGES.length];
+  return THINKING_STATUS_MESSAGES[index % THINKING_STATUS_MESSAGES.length]!;
 }
 
 export const THINKING_LOADING_MESSAGES = [
@@ -57,7 +57,10 @@ export function getShuffledThinkingMessages(count: number = 8): string[] {
   const shuffled = [...THINKING_LOADING_MESSAGES];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    const current = shuffled[i]!;
+    const next = shuffled[j]!;
+    shuffled[i] = next;
+    shuffled[j] = current;
   }
   return shuffled.slice(0, count);
 }
