@@ -35,7 +35,7 @@ type StreamToolStopEvent = {
 export function createRuntimeUiStateTracker(): RuntimeUiStateTracker {
   return {
     loadingMessages: [],
-    sessionStatus: 'is thinking...',
+    sessionStatus: 'Thinking...',
     systemStatuses: {},
     taskStatus: undefined,
     textStreamingActive: false,
@@ -215,7 +215,7 @@ function pickRuntimeStatus(runtimeUi: RuntimeUiStateTracker): string {
       runtimeUi.taskStatus?.text ??
       pickRuntimeSystemStatus(runtimeUi) ??
       runtimeUi.sessionStatus ??
-      'is thinking...',
+      'Thinking...',
   );
 }
 

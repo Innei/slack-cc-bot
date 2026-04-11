@@ -1,28 +1,28 @@
 export const THINKING_STATUS_MESSAGES = [
-  'is thinking...',
-  'is gathering thoughts...',
-  'is turning the question over...',
-  'is following a thread...',
-  'is tracing the outline of an answer...',
-  'is wandering through ideas...',
-  'is weighing words carefully...',
-  'is listening to the silence between words...',
-  'is looking at it from another angle...',
-  'is finding the right words...',
-  'is chasing a thought to its source...',
-  'is connecting distant dots...',
-  'is sketching the shape of a reply...',
-  'is reading between the lines...',
-  'is walking around the problem...',
-  'is weaving fragments into coherence...',
-  'is watching the pieces fall into place...',
-  'is holding the question lightly...',
-  'is letting the answer surface...',
-  'is paying attention to what matters...',
+  'Thinking...',
+  'Gathering thoughts...',
+  'Turning the question over...',
+  'Following a thread...',
+  'Tracing the outline of an answer...',
+  'Wandering through ideas...',
+  'Weighing words carefully...',
+  'Listening to the silence between words...',
+  'Looking at it from another angle...',
+  'Finding the right words...',
+  'Chasing a thought to its source...',
+  'Connecting distant dots...',
+  'Sketching the shape of a reply...',
+  'Reading between the lines...',
+  'Walking around the problem...',
+  'Weaving fragments into coherence...',
+  'Watching the pieces fall into place...',
+  'Holding the question lightly...',
+  'Letting the answer surface...',
+  'Paying attention to what matters...',
 ] as const;
 
 export function rotateThinkingStatus(index: number): string {
-  return THINKING_STATUS_MESSAGES[index % THINKING_STATUS_MESSAGES.length];
+  return THINKING_STATUS_MESSAGES[index % THINKING_STATUS_MESSAGES.length]!;
 }
 
 export const THINKING_LOADING_MESSAGES = [
@@ -57,7 +57,10 @@ export function getShuffledThinkingMessages(count: number = 8): string[] {
   const shuffled = [...THINKING_LOADING_MESSAGES];
   for (let i = shuffled.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    const current = shuffled[i]!;
+    const next = shuffled[j]!;
+    shuffled[i] = next;
+    shuffled[j] = current;
   }
   return shuffled.slice(0, count);
 }

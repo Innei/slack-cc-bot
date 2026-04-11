@@ -75,7 +75,6 @@
 | `SLACK_SIGNING_SECRET` | Yes      | Slack app integrity configuration | Non-empty string            |
 | `SLACK_REACTION_NAME`  | No       | Initial acknowledgement reaction  | Non-empty string            |
 | `CLAUDE_MODEL`         | No       | Optional model override           | Non-empty string if present |
-| `CLAUDE_MAX_TURNS`     | No       | Claude loop ceiling               | Positive integer            |
 | `LOG_LEVEL`            | No       | Logger verbosity                  | Enumerated string           |
 | `LOG_TO_FILE`          | No       | Enable file reporter              | Boolean                     |
 | `LOG_DIR`              | No       | File log directory                | Non-empty string            |

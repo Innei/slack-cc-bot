@@ -308,7 +308,7 @@ async function handleSessionStateChangedMessage(
 ): Promise<void> {
   logger.info('Claude session state changed: %s', message.state);
   if (message.state === 'running') {
-    setSessionStatus(handlers.runtimeUi, 'is thinking...');
+    setSessionStatus(handlers.runtimeUi, 'Thinking...');
     clearSystemStatus(handlers.runtimeUi, 'permission');
   } else if (message.state === 'requires_action') {
     setSystemStatus(handlers.runtimeUi, 'permission', 'Awaiting permission...');

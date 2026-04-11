@@ -243,7 +243,7 @@ describe('Workspace message action test', () => {
     expect(statusCalls.at(0)).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'Thinking...',
       thread_ts: '1712345678.000200',
     });
     expect(statusCalls.at(-1)).toEqual({

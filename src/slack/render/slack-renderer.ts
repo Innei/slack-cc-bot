@@ -19,7 +19,7 @@ const THINKING_STATUS_ROTATION_INTERVAL_MS = 2500;
 const THINKING_STATUS_SET = new Set<string>(THINKING_STATUS_MESSAGES);
 
 function isThinkingStatus(status: string | undefined): boolean {
-  return !status || status === 'is thinking...' || THINKING_STATUS_SET.has(status);
+  return !status || status === 'Thinking...' || THINKING_STATUS_SET.has(status);
 }
 
 interface RendererUiState {
@@ -107,7 +107,7 @@ export class SlackRenderer {
 
     await this.setUiState(client, channelId, {
       threadTs,
-      status: 'is thinking...',
+      status: 'Thinking...',
       loadingMessages: loadingMessages ? [...loadingMessages] : getShuffledThinkingMessages(),
       clear: false,
     });

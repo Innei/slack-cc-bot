@@ -259,7 +259,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     if (state.clear) {
       if (progressMessageActive && progressMessageTs) {
         await safeRender('delete thread progress message', () =>
-          renderer.deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs),
+          renderer.deleteThreadProgressMessage(client, channel, threadTs, progressMessageTs!),
         );
         progressMessageTs = undefined;
         progressMessageActive = false;
@@ -563,7 +563,7 @@ function formatUserInputQuestionMessage(
 function createDefaultThinkingState(threadTs: string): AgentActivityState {
   return {
     threadTs,
-    status: 'is thinking...',
+    status: 'Thinking...',
     activities: getShuffledThinkingMessages(),
     clear: false,
   };

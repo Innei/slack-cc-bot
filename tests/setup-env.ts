@@ -4,7 +4,6 @@ Object.assign(process.env, {
   SLACK_BOT_TOKEN: 'xoxb-test',
   SLACK_REACTION_NAME: 'eyes',
   SLACK_SIGNING_SECRET: 'test-signing-secret',
-  CLAUDE_MAX_TURNS: '24',
   CLAUDE_PERMISSION_MODE: 'bypassPermissions',
   LOG_DIR: './logs',
   LOG_LEVEL: 'error',

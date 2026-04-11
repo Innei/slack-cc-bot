@@ -705,7 +705,6 @@ session = query({
     agentProgressSummaries: true,
     includeHookEvents: true,
     includePartialMessages: true,
-    maxTurns: env.CLAUDE_MAX_TURNS,
     ...(request.workspacePath ? { cwd: request.workspacePath } : {}),
     systemPrompt: buildSystemPrompt(request),
     mcpServers: {

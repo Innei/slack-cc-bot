@@ -244,7 +244,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'Thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -270,7 +270,7 @@ describe('Slack loading status test', () => {
       channel: 'C123',
       thread_ts: threadTs,
     });
-    expect(firstPost.text).not.toBe('Thinking... — Thinking...');
+    expect(firstPost.text).not.toBe('Working on your request... — Working on your request...');
     expect(firstPost.blocks).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -617,7 +617,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'is thinking...',
+      status: 'Thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -672,6 +672,7 @@ describe('Slack loading status test', () => {
       ]),
     );
   });
+
 
   it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {
     const search = vi.fn(() => []);

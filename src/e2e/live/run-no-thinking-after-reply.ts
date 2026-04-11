@@ -8,7 +8,7 @@ import { createApplication } from '~/application.js';
 import { env } from '~/env/server.js';
 import type { SlackStatusProbeRecord } from '~/slack/render/status-probe.js';
 
-import { THINKING_LOADING_MESSAGES } from '../../slack/thinking-messages.js';
+import { THINKING_LOADING_MESSAGES, THINKING_STATUS_MESSAGES } from '../../slack/thinking-messages.js';
 import { readSlackStatusProbeFile, resetSlackStatusProbeFile } from './file-slack-status-probe.js';
 import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
@@ -144,7 +144,7 @@ async function main(): Promise<void> {
 function isDefaultThinkingStatus(record: SlackStatusProbeRecord): boolean {
   if (record.kind !== 'status') return false;
   if (record.clear) return false;
-  if (record.status !== 'is thinking...') return false;
+  if (!THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])) return false;
 
   const messages = record.loadingMessages ?? [];
   if (messages.length === 0) return true;
@@ -187,7 +187,7 @@ function assertResult(result: NoThinkingAfterReplyResult): void {
   }
   if (!result.matched.noThinkingAfterClear) {
     failures.push(
-      'a default "Thinking..." status was re-set after a clear — ' +
+      'a default thinking status was re-set after a clear — ' +
         'expected clear to be final with no thinking restoration',
     );
   }
@@ -217,7 +217,7 @@ export const scenario: LiveE2EScenario = {
   id: 'no-thinking-after-reply',
   title: 'No Thinking After Reply',
   description:
-    'Verify that the "Thinking..." status is not re-set after the assistant posts a reply. ' +
+    'Verify that a default thinking status is not re-set after the assistant posts a reply. ' +
     'After a clear event, no default thinking status should reappear.',
   keywords: ['thinking', 'status', 'clear', 'reply', 'loading', 'flash'],
   run: main,
