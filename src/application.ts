@@ -14,6 +14,7 @@ import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
 import { createSlackApp } from '~/slack/app.js';
+import { startSlackAppWithRetry } from '~/slack/network-guard.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
 import {
   createThreadExecutionRegistry,
@@ -93,7 +94,7 @@ export function createApplication(): RuntimeApplication {
           );
         });
       }
-      await slackApp.start();
+      await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
       logger.info('Slack Socket Mode application started.');
     },
     async stop() {

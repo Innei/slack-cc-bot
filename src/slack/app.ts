@@ -1,5 +1,7 @@
 import { App, Assistant } from '@slack/bolt';
 
+import { createSlackNetworkAgent, createSlackWebClientOptions } from './network-guard.js';
+
 import type { AgentProviderRegistry } from '~/agent/registry.js';
 import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import { env } from '~/env/server.js';
@@ -48,11 +50,14 @@ export interface SlackApplicationDependencies {
 }
 
 export function createSlackApp(deps: SlackApplicationDependencies): App {
+  const networkAgent = createSlackNetworkAgent();
   const app = new App({
     token: env.SLACK_BOT_TOKEN,
     appToken: env.SLACK_APP_TOKEN,
     signingSecret: env.SLACK_SIGNING_SECRET,
     socketMode: true,
+    agent: networkAgent,
+    clientOptions: createSlackWebClientOptions(networkAgent),
   });
 
   const renderer = new SlackRenderer(deps.logger.withTag('slack:render'), deps.statusProbe);
