@@ -71,6 +71,7 @@ export function createDatabase(dbPath: string) {
   ensureSessionsColumn(sqlite, 'workspace_label', 'TEXT');
   ensureSessionsColumn(sqlite, 'workspace_source', 'TEXT');
   ensureSessionsColumn(sqlite, 'agent_provider', 'TEXT');
+  ensureSessionsColumn(sqlite, 'last_turn_trigger_ts', 'TEXT');
 
   const db = drizzle(sqlite, { schema });
   return { db, sqlite };

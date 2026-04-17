@@ -173,7 +173,7 @@ export async function resolveSessionStep(
 ): Promise<PipelineStepResult> {
   const { deps, message, options, threadTs, workspace } = ctx;
 
-  const { resumeHandle } = resolveAndPersistSession(
+  const { resumeHandle, session } = resolveAndPersistSession(
     threadTs,
     message.channel,
     options.rootMessageTs,
@@ -182,6 +182,9 @@ export async function resolveSessionStep(
     deps.sessionStore,
   );
   ctx.resumeHandle = resumeHandle;
+  ctx.previousTurnTriggerTs = resumeHandle ? session.lastTurnTriggerTs : undefined;
+
+  deps.sessionStore.patch(threadTs, { lastTurnTriggerTs: message.ts });
 
   return CONTINUE;
 }
@@ -300,6 +303,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       {
         abortSignal: controller.signal,
         channelId: message.channel,
+        currentTriggerTs: message.ts,
         executionId,
         threadTs,
         userId: message.user,
@@ -314,6 +318,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
             }
           : {}),
         ...(resumeHandle ? { resumeHandle } : {}),
+        ...(ctx.previousTurnTriggerTs ? { previousTurnTriggerTs: ctx.previousTurnTriggerTs } : {}),
       },
       sink,
     );

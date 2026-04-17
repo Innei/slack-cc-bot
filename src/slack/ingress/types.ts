@@ -67,6 +67,7 @@ export interface ConversationPipelineContext {
   message: ThreadConversationMessage;
 
   options: ThreadConversationOptions;
+  previousTurnTriggerTs?: string | undefined;
   resumeHandle?: string | undefined;
   threadContext?: NormalizedThreadContext | undefined;
   threadTs: string;

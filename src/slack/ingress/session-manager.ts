@@ -40,7 +40,7 @@ export function resolveAndPersistSession(
       channelId,
       rootMessageTs,
       ...workspaceFields,
-      ...(shouldResetSession ? { providerSessionId: undefined } : {}),
+      ...(shouldResetSession ? { providerSessionId: undefined, lastTurnTriggerTs: undefined } : {}),
     });
     return { resumeHandle, session: patched ?? existingSession };
   }
