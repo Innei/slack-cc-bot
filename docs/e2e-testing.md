@@ -64,6 +64,6 @@ pnpm e2e -- --list
 pnpm e2e -- --search workspace
 ```
 
-The CLI auto-discovers `run.ts` and `run-*.ts` files under `src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
+The CLI auto-discovers `run.ts` and `run-*.ts` files under `apps/bot/src/e2e/live/` and runs them serially. Each scenario manages its own application lifecycle, cleanup, and result artifacts.
 
 Recent scenarios cover rich text rendering, long reply splitting, workspace label attachment, clearing the thinking state after reply, retained progress summaries, cross-session preference memory recall, reaction-based stop, and reaction lifecycle.

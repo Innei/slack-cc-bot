@@ -49,9 +49,12 @@ The bot's green dot is controlled by the `always_online: true` flag in the app m
 ## Project structure
 
 ```
-src/
+apps/bot/src/
 ├── index.ts                    # Entry point
 ├── application.ts              # Composition root (wires all dependencies)
+├── server/                     # Hono HTTP API consumed by apps/web-ui
+│   ├── http-server.ts
+│   └── routes/                 # Analytics, sessions, memory, workspaces, health
 ├── env/server.ts               # Validated environment schema
 ├── logger/                     # Structured logging with redaction
 ├── db/                         # SQLite database + Drizzle schema

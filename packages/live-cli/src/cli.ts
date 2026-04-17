@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import fs from 'node:fs';
 import path from 'node:path';
 
 import * as p from '@clack/prompts';
@@ -33,7 +34,13 @@ function resolveLiveDir(): string {
   const rootDir = process.env.LIVE_E2E_DIR;
   if (rootDir) return path.resolve(rootDir);
 
-  return path.resolve(process.cwd(), 'src/e2e/live');
+  const cwd = process.cwd();
+  const botLocal = path.resolve(cwd, 'src/e2e/live');
+  const botFromRoot = path.resolve(cwd, 'apps/bot/src/e2e/live');
+
+  if (fs.existsSync(botLocal)) return botLocal;
+  if (fs.existsSync(botFromRoot)) return botFromRoot;
+  return botLocal;
 }
 
 async function actionList(opts: { search?: string }): Promise<void> {
