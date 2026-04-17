@@ -1,0 +1,133 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: Geist, Arial, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', sans-serif;
+  --font-mono:
+    'Geist Mono', ui-monospace, SFMono-Regular, 'Roboto Mono', Menlo, Monaco, 'Liberation Mono',
+    'DejaVu Sans Mono', 'Courier New', monospace;
+
+  /* Core neutral scale (Vercel-inspired) */
+  --color-ink: #171717;
+  --color-ink-subtle: #4d4d4d;
+  --color-ink-muted: #666666;
+  --color-ink-faint: #808080;
+  --color-line: #ebebeb;
+  --color-line-subtle: #f5f5f5;
+  --color-surface: #ffffff;
+  --color-surface-tint: #fafafa;
+
+  /* Workflow accents */
+  --color-ship: #ff5b4f;
+  --color-preview: #de1d8d;
+  --color-develop: #0a72ef;
+
+  /* Interactive */
+  --color-link: #0072f5;
+  --color-focus: hsla(212, 100%, 48%, 1);
+
+  /* Badge */
+  --color-badge-bg: #ebf5ff;
+  --color-badge-fg: #0068d6;
+
+  /* Shadow tokens (shadow-as-border + layered depth) */
+  --shadow-ring: rgba(0, 0, 0, 0.08) 0px 0px 0px 1px;
+  --shadow-ring-light: rgb(235, 235, 235) 0px 0px 0px 1px;
+  --shadow-subtle: rgba(0, 0, 0, 0.04) 0px 2px 2px;
+  --shadow-card:
+    rgba(0, 0, 0, 0.08) 0px 0px 0px 1px, rgba(0, 0, 0, 0.04) 0px 2px 2px,
+    rgba(0, 0, 0, 0.04) 0px 8px 8px -8px, #fafafa 0px 0px 0px 1px inset;
+}
+
+@font-face {
+  font-family: 'Geist';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('https://vercel.com/font/geist-sans/Geist-Variable.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('https://vercel.com/font/geist-mono/GeistMono-Variable.woff2') format('woff2');
+}
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    background: #ffffff;
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    font-feature-settings: 'liga' on;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: #171717;
+    color: hsla(0, 0%, 95%, 1);
+  }
+
+  a {
+    color: var(--color-link);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  a:hover {
+    text-decoration-thickness: 2px;
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--color-focus);
+    outline-offset: 2px;
+    border-radius: 6px;
+  }
+
+  code,
+  pre,
+  kbd,
+  samp {
+    font-family: var(--font-mono);
+    font-feature-settings: 'liga' on;
+  }
+}
+
+@utility shadow-ring {
+  box-shadow: var(--shadow-ring);
+}
+
+@utility shadow-ring-light {
+  box-shadow: var(--shadow-ring-light);
+}
+
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+/* Vercel-style tight tracking for display sizes */
+@utility tracking-display-hero {
+  letter-spacing: -2.4px;
+}
+
+@utility tracking-display-xl {
+  letter-spacing: -1.28px;
+}
+
+@utility tracking-display-lg {
+  letter-spacing: -0.96px;
+}
+
+@utility tracking-display-md {
+  letter-spacing: -0.32px;
+}

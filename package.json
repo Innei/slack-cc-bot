@@ -2,22 +2,24 @@
   "name": "kagura",
   "version": "0.1.0",
   "private": true,
-  "description": "Slack-native Claude Agent SDK integration scaffold for local execution on macOS.",
+  "description": "Slack-native Claude Agent SDK integration scaffold — monorepo root.",
   "type": "module",
   "scripts": {
-    "build": "tsdown",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio",
-    "dev": "nodemon",
-    "e2e": "tsx packages/live-cli/src/cli.ts run",
-    "e2e:interactive": "tsx packages/live-cli/src/cli.ts run --interactive",
-    "e2e:list": "tsx packages/live-cli/src/cli.ts list",
-    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
+    "build": "pnpm -F @kagura/bot run build",
+    "build:web": "pnpm -F @kagura/web-ui run build",
+    "db:generate": "pnpm -F @kagura/bot run db:generate",
+    "db:migrate": "pnpm -F @kagura/bot run db:migrate",
+    "db:studio": "pnpm -F @kagura/bot run db:studio",
+    "dev": "pnpm -F @kagura/bot run dev",
+    "dev:web": "pnpm -F @kagura/web-ui run dev",
+    "e2e": "pnpm -F @kagura/bot run e2e",
+    "e2e:interactive": "pnpm -F @kagura/bot run e2e:interactive",
+    "e2e:list": "pnpm -F @kagura/bot run e2e:list",
+    "e2e:skill-gating:local": "pnpm -F @kagura/bot run e2e:skill-gating:local",
+    "start": "pnpm -F @kagura/bot run start",
+    "test": "pnpm -F @kagura/bot run test",
+    "test:watch": "pnpm -F @kagura/bot run test:watch",
+    "typecheck": "pnpm -r run typecheck"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
@@ -30,36 +32,17 @@
       "prettier --write --ignore-unknown"
     ]
   },
-  "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.2.92",
-    "@anthropic-ai/sdk": "0.82.0",
-    "@innei/pretty-logger-core": "0.4.2",
-    "@slack/bolt": "4.6.0",
-    "@t3-oss/env-core": "0.13.11",
-    "better-sqlite3": "^12.8.0",
-    "dotenv": "17.4.0",
-    "drizzle-orm": "^0.45.2",
-    "markdown-to-slack-blocks": "1.5.0",
-    "zod": "4.3.6"
-  },
   "devDependencies": {
     "@lobehub/eslint-config": "^2.1.5",
     "@lobehub/prettier-config": "^2.1.5",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "25.5.2",
-    "drizzle-kit": "^0.31.10",
     "eslint": "^10.2.0",
     "lint-staged": "^16.4.0",
-    "nodemon": "3.1.14",
     "prettier": "^3.8.1",
     "prettier-plugin-packagejson": "^3.0.2",
     "prettier-plugin-sh": "^0.18.1",
     "prettier-plugin-sort-json": "^4.2.0",
     "simple-git-hooks": "^2.13.1",
-    "tsdown": "0.21.7",
-    "tsx": "4.21.0",
-    "typescript": "^6.0.2",
-    "vitest": "4.1.2"
+    "typescript": "^6.0.2"
   },
   "packageManager": "pnpm@10.33.0",
   "engines": {
