@@ -3,6 +3,7 @@ export interface SessionRecord {
   bootstrapMessageTs?: string | undefined;
   channelId: string;
   createdAt: string;
+  lastTurnTriggerTs?: string | undefined;
   providerSessionId?: string | undefined;
   rootMessageTs: string;
   streamMessageTs?: string | undefined;

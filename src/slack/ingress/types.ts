@@ -22,8 +22,8 @@ export interface SlackIngressDependencies {
   claudeExecutor: AgentExecutor;
   logger: AppLogger;
   memoryStore: MemoryStore;
-  providerRegistry?: AgentProviderRegistry;
   permissionBridge?: SlackPermissionBridge;
+  providerRegistry?: AgentProviderRegistry;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
@@ -65,6 +65,7 @@ export interface ConversationPipelineContext {
   message: ThreadConversationMessage;
 
   options: ThreadConversationOptions;
+  previousTurnTriggerTs?: string | undefined;
   resumeHandle?: string | undefined;
   threadContext?: NormalizedThreadContext | undefined;
   threadTs: string;

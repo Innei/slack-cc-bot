@@ -14,6 +14,7 @@ export const sessions = sqliteTable('sessions', {
   workspacePath: text('workspace_path'),
   workspaceLabel: text('workspace_label'),
   workspaceSource: text('workspace_source', { enum: ['auto', 'manual'] }),
+  lastTurnTriggerTs: text('last_turn_trigger_ts'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

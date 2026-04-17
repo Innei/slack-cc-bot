@@ -207,7 +207,7 @@ describe('prompt assembly', () => {
       expect(userText).toContain('Message 1 | ts=100.000');
     });
 
-    it('skips thread context for resume sessions', () => {
+    it('skips full thread context for resume sessions without a cursor', () => {
       const request = baseRequest({
         resumeHandle: 'session-abc',
         threadContext: {
@@ -227,6 +227,79 @@ describe('prompt assembly', () => {
       });
       const { userText } = assemblePrompt(request);
       expect(userText).not.toContain('<thread_context>');
+      expect(userText).not.toContain('<slack_transcript_since_last_turn>');
+    });
+
+    it('injects incremental slack transcript on resume when a cursor is set', () => {
+      const request = baseRequest({
+        resumeHandle: 'session-abc',
+        previousTurnTriggerTs: '100.000',
+        currentTriggerTs: '300.000',
+        threadContext: {
+          messages: [
+            {
+              text: 'earlier user turn (already in SDK history)',
+              ts: '100.000',
+              authorId: 'U1',
+              files: [],
+              images: [],
+              rawText: 'earlier user turn (already in SDK history)',
+              threadTs: '100.000',
+            },
+            {
+              text: 'bot reply visible in Slack between turns',
+              ts: '200.000',
+              authorId: 'B_BOT',
+              files: [],
+              images: [],
+              rawText: 'bot reply visible in Slack between turns',
+              threadTs: '100.000',
+            },
+            {
+              text: 'follow-up user message (current trigger)',
+              ts: '300.000',
+              authorId: 'U1',
+              files: [],
+              images: [],
+              rawText: 'follow-up user message (current trigger)',
+              threadTs: '100.000',
+            },
+          ],
+          renderedPrompt: 'should be ignored on resume',
+        },
+      });
+      const { userText } = assemblePrompt(request);
+
+      expect(userText).not.toContain('<thread_context>');
+      expect(userText).toContain('<slack_transcript_since_last_turn>');
+      expect(userText).toContain('bot reply visible in Slack between turns');
+      expect(userText).not.toContain('earlier user turn (already in SDK history)');
+      expect(userText).not.toContain('follow-up user message (current trigger)');
+    });
+
+    it('omits transcript block on resume when no messages have appeared since the cursor', () => {
+      const request = baseRequest({
+        resumeHandle: 'session-abc',
+        previousTurnTriggerTs: '200.000',
+        currentTriggerTs: '300.000',
+        threadContext: {
+          messages: [
+            {
+              text: 'current trigger',
+              ts: '300.000',
+              authorId: 'U1',
+              files: [],
+              images: [],
+              rawText: 'current trigger',
+              threadTs: '100.000',
+            },
+          ],
+          renderedPrompt: 'should be ignored on resume',
+        },
+      });
+      const { userText } = assemblePrompt(request);
+      expect(userText).not.toContain('<thread_context>');
+      expect(userText).not.toContain('<slack_transcript_since_last_turn>');
     });
 
     it('includes user message in <user_message> tags', () => {

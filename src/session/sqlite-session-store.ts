@@ -39,6 +39,7 @@ export class SqliteSessionStore implements SessionStore {
         workspacePath: record.workspacePath ?? null,
         workspaceLabel: record.workspaceLabel ?? null,
         workspaceSource: record.workspaceSource ?? null,
+        lastTurnTriggerTs: record.lastTurnTriggerTs ?? null,
         createdAt: record.createdAt,
         updatedAt: record.updatedAt,
       })
@@ -56,6 +57,7 @@ export class SqliteSessionStore implements SessionStore {
           workspacePath: record.workspacePath ?? null,
           workspaceLabel: record.workspaceLabel ?? null,
           workspaceSource: record.workspaceSource ?? null,
+          lastTurnTriggerTs: record.lastTurnTriggerTs ?? null,
           createdAt: record.createdAt,
           updatedAt: record.updatedAt,
         },
@@ -93,6 +95,7 @@ export class SqliteSessionStore implements SessionStore {
         workspacePath: next.workspacePath ?? null,
         workspaceLabel: next.workspaceLabel ?? null,
         workspaceSource: next.workspaceSource ?? null,
+        lastTurnTriggerTs: next.lastTurnTriggerTs ?? null,
         createdAt: next.createdAt,
         updatedAt: next.updatedAt,
       })
@@ -120,6 +123,7 @@ export class SqliteSessionStore implements SessionStore {
     if (row.workspaceLabel !== null) record.workspaceLabel = row.workspaceLabel;
     if (row.workspaceSource !== null) record.workspaceSource = row.workspaceSource;
     if (row.agentProvider !== null) record.agentProvider = row.agentProvider;
+    if (row.lastTurnTriggerTs !== null) record.lastTurnTriggerTs = row.lastTurnTriggerTs;
     return record;
   }
 }
