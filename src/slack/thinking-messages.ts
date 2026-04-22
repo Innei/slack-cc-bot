@@ -11,10 +11,11 @@
 // same instant.
 
 // Canonical default string used whenever no tool-specific progress applies.
-// Kept capitalized ("Thinking...") per product preference, accepting the
-// "{AppName} is Thinking..." rendering. All `'Thinking...'` literals across
-// the codebase MUST reference this constant so the default can evolve in one
-// place and maps consistently to Slack's `status` / `loading_messages`.
+// The source-of-truth form is capitalized ("Thinking...") so it reads as a
+// standalone sentence in progress messages and logs; the Slack renderer
+// lowercases the leading letter at the `setStatus` boundary so the Slack UI
+// shows "{AppName} is thinking...". All `'Thinking...'` literals across the
+// codebase MUST reference this constant.
 export const DEFAULT_ASSISTANT_THINKING_STATUS = 'Thinking...';
 
 export const THINKING_STATUS_MESSAGES = [

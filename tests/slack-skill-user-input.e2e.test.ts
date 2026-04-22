@@ -70,8 +70,8 @@ describe('Slack skill user input bridge', () => {
     );
     expect(statusCalls.at(-1)).toEqual({
       channel_id: 'C123',
-      loading_messages: expect.arrayContaining(['Which calendar should I use?']),
-      status: 'Waiting for your reply...',
+      loading_messages: expect.arrayContaining(['which calendar should I use?']),
+      status: 'waiting for your reply...',
       thread_ts: threadTs,
     });
 
