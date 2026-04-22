@@ -20,19 +20,17 @@ All responses are **ephemeral** (only visible to the invoking user).
 | `/provider list`       | List all registered agent providers                                |
 | `/provider <id>`       | Switch agent provider for the current thread (use inside a thread) |
 | `/provider reset`      | Clear per-thread provider override, revert to default              |
-| `/cancel`              | Stop the bot's in-progress reply in the current thread             |
 
 ## Stopping in-progress replies
 
-Three mechanisms are available to cancel an active bot reply:
+Two mechanisms are available to cancel an active bot reply:
 
 | Method               | How to use                                                                                                                                                                                 |
 | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Slash command**    | Run `/cancel` inside the thread. Stops all active executions bound to that thread.                                                                                                         |
 | **Emoji reaction**   | Add a :octagonal_sign: (`:octagonal_sign:`) or :no_entry_sign: (`:stop_sign:`) reaction to any message in the thread (the trigger message, the bot's progress message, or the thread root) |
 | **Message shortcut** | Right-click (or `...` menu) on any message in the thread -> **Stop Reply**                                                                                                                 |
 
-All three stop active executions in the thread and finalize the bot's progress message as "stopped."
+Both stop all active executions in the thread and finalize the bot's progress message as "stopped."
 
 ## Reaction lifecycle
 

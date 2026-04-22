@@ -37,7 +37,7 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 
 **Workspace routing** — Each thread binds to a repo/workdir. Auto-detected from message text, or manually chosen via Message Action.
 
-**Agent control** — Pluggable provider registry, stop via `/cancel`, :octagonal_sign: reaction, or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
+**Agent control** — Pluggable provider registry, stop via :octagonal_sign: reaction or message shortcut, slash commands for introspection (`/usage`, `/workspace`, `/memory`, `/session`, `/version`, `/provider`).
 
 **Operations** — Auto-provisioned manifest (commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
 
