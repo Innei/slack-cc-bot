@@ -135,6 +135,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/session', description: 'test' },
               { command: '/provider', description: 'test' },
               { command: '/version', description: 'test' },
+              { command: '/cancel', description: 'test' },
             ],
             shortcuts: [
               {
@@ -204,6 +205,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/session', description: 'test' },
                 { command: '/provider', description: 'test' },
                 { command: '/version', description: 'test' },
+                { command: '/cancel', description: 'test' },
               ],
               shortcuts: [
                 {
@@ -344,7 +346,7 @@ describe('syncSlashCommands with token rotation', () => {
 
     const body = JSON.parse(updateInit.body as string);
     const commands = body.manifest.features.slash_commands;
-    expect(commands).toHaveLength(6);
+    expect(commands).toHaveLength(7);
     expect(commands.map((c: { command: string }) => c.command)).toEqual(
       expect.arrayContaining([
         '/usage',
@@ -353,6 +355,7 @@ describe('syncSlashCommands with token rotation', () => {
         '/session',
         '/provider',
         '/version',
+        '/cancel',
       ]),
     );
     const shortcuts = body.manifest.features.shortcuts;
@@ -378,6 +381,7 @@ describe('syncSlashCommands with token rotation', () => {
               { command: '/session', description: 'x' },
               { command: '/provider', description: 'x' },
               { command: '/version', description: 'x' },
+              { command: '/cancel', description: 'x' },
             ],
             shortcuts: [
               {
@@ -426,6 +430,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/session', description: 'x' },
                 { command: '/provider', description: 'x' },
                 { command: '/version', description: 'x' },
+                { command: '/cancel', description: 'x' },
               ],
               shortcuts: [
                 {
@@ -479,6 +484,7 @@ describe('syncSlashCommands with token rotation', () => {
                 { command: '/session', description: 'x' },
                 { command: '/provider', description: 'x' },
                 { command: '/version', description: 'x' },
+                { command: '/cancel', description: 'x' },
               ],
               shortcuts: [
                 {

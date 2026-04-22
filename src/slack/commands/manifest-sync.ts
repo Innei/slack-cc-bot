@@ -103,6 +103,11 @@ const DESIRED_COMMANDS: SlackManifestSlashCommand[] = [
     description: 'Show the current bot deployment version (git commit hash)',
     usage_hint: ' ',
   },
+  {
+    command: '/cancel',
+    description: "Stop the bot's in-progress reply in this thread",
+    usage_hint: ' ',
+  },
 ];
 
 const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [

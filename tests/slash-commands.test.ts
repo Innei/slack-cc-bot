@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
+import { handleCancelCommand } from '~/slack/commands/cancel-command.js';
 import { handleMemoryCommand } from '~/slack/commands/memory-command.js';
 import { handleSessionCommand } from '~/slack/commands/session-command.js';
 import type { SlashCommandDependencies } from '~/slack/commands/types.js';
@@ -460,5 +461,64 @@ describe('handleVersionCommand', () => {
     const deployDate = deployMatch?.[1];
     expect(deployDate).toBeTruthy();
     expect(new Date(deployDate!).getTime()).not.toBeNaN();
+  });
+});
+
+describe('handleCancelCommand', () => {
+  it('returns ephemeral hint when invoked outside a thread', async () => {
+    const registry = createMockThreadExecutionRegistry();
+    const deps = createTestDeps({ threadExecutionRegistry: registry });
+
+    const result = await handleCancelCommand('', { ...deps, channelId: 'C1' });
+
+    expect(result.response_type).toBe('ephemeral');
+    expect(result.text).toContain('inside a thread');
+    expect(registry.stopAll).not.toHaveBeenCalled();
+  });
+
+  it('reports "no in-progress reply" when nothing is running', async () => {
+    const registry = createMockThreadExecutionRegistry();
+    (registry.stopAll as ReturnType<typeof vi.fn>).mockResolvedValue({ stopped: 0, failed: 0 });
+    const deps = createTestDeps({ threadExecutionRegistry: registry });
+
+    const result = await handleCancelCommand('', {
+      ...deps,
+      channelId: 'C1',
+      threadTs: 'ts-thread',
+    });
+
+    expect(registry.stopAll).toHaveBeenCalledWith('ts-thread', 'user_stop');
+    expect(result.response_type).toBe('ephemeral');
+    expect(result.text).toContain('No in-progress reply');
+  });
+
+  it('reports stopped count with singular wording', async () => {
+    const registry = createMockThreadExecutionRegistry();
+    (registry.stopAll as ReturnType<typeof vi.fn>).mockResolvedValue({ stopped: 1, failed: 0 });
+    const deps = createTestDeps({ threadExecutionRegistry: registry });
+
+    const result = await handleCancelCommand('', {
+      ...deps,
+      channelId: 'C1',
+      threadTs: 'ts-thread',
+    });
+
+    expect(result.text).toContain('Stopped 1 in-progress reply');
+    expect(result.text).not.toContain('replies');
+  });
+
+  it('reports stopped count with plural wording and failed when mixed', async () => {
+    const registry = createMockThreadExecutionRegistry();
+    (registry.stopAll as ReturnType<typeof vi.fn>).mockResolvedValue({ stopped: 2, failed: 1 });
+    const deps = createTestDeps({ threadExecutionRegistry: registry });
+
+    const result = await handleCancelCommand('', {
+      ...deps,
+      channelId: 'C1',
+      threadTs: 'ts-thread',
+    });
+
+    expect(result.text).toContain('Stopped 2 in-progress replies');
+    expect(result.text).toContain('1 failed to stop');
   });
 });
