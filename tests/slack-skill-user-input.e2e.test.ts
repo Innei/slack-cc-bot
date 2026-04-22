@@ -37,6 +37,7 @@ describe('Slack skill user input bridge', () => {
     const executor = createInteractiveExecutor();
     const deps = {
       analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,
       memoryStore,

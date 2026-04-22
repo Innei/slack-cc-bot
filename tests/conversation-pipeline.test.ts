@@ -202,6 +202,10 @@ function createMinimalPipelineContext(overrides?: {
       } as unknown as SlackThreadContextLoader,
       threadExecutionRegistry,
       userInputBridge: new SlackUserInputBridge(logger as unknown as AppLogger),
+      channelPreferenceStore: {
+        get: vi.fn().mockReturnValue(undefined),
+        upsert: vi.fn(),
+      },
       workspaceResolver: {
         resolveFromText: vi
           .fn()

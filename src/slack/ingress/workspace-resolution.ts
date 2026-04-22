@@ -51,11 +51,6 @@ export function resolveWorkspaceForConversation(
     };
   }
 
-  const autoResolution = workspaceResolver.resolveFromText(messageText, 'auto');
-  if (autoResolution.status !== 'missing') {
-    return autoResolution;
-  }
-
   const preference = channelPreferenceStore.get(channelId);
   if (preference?.defaultWorkspaceInput) {
     const preferenceResolution = workspaceResolver.resolveManualInput(
@@ -65,6 +60,11 @@ export function resolveWorkspaceForConversation(
     if (preferenceResolution.status === 'unique') {
       return preferenceResolution;
     }
+  }
+
+  const autoResolution = workspaceResolver.resolveFromText(messageText, 'auto');
+  if (autoResolution.status !== 'missing') {
+    return autoResolution;
   }
 
   return autoResolution;

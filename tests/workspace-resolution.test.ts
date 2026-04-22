@@ -105,8 +105,7 @@ describe('resolveWorkspaceForConversation', () => {
     expect(resolver.resolveFromText).toHaveBeenCalledWith('hello', 'auto');
   });
 
-  it('falls back to channel preference when resolver returns missing', () => {
-    const missing: WorkspaceResolution = { status: 'missing', query: 'hello', reason: 'no match' };
+  it('uses channel preference before resolver when preference exists and resolves', () => {
     const unique: WorkspaceResolution = {
       status: 'unique',
       workspace: {
@@ -126,7 +125,7 @@ describe('resolveWorkspaceForConversation', () => {
       },
     };
     const resolver = {
-      resolveFromText: vi.fn().mockReturnValue(missing),
+      resolveFromText: vi.fn(),
       resolveManualInput: vi.fn().mockReturnValue(unique),
     } as unknown as WorkspaceResolver;
     const preferenceStore = createMockChannelPreferenceStore('my-repo');
@@ -140,33 +139,33 @@ describe('resolveWorkspaceForConversation', () => {
     );
 
     expect(result).toEqual(unique);
-    expect(resolver.resolveFromText).toHaveBeenCalledWith('hello', 'auto');
     expect(preferenceStore.get).toHaveBeenCalledWith('C123');
     expect(resolver.resolveManualInput).toHaveBeenCalledWith('my-repo', 'manual');
+    expect(resolver.resolveFromText).not.toHaveBeenCalled();
   });
 
-  it('ignores channel preference when resolver returns unique', () => {
-    const unique: WorkspaceResolution = {
+  it('uses channel preference over auto-resolution when both could match', () => {
+    const preferenceResolution: WorkspaceResolution = {
       status: 'unique',
       workspace: {
-        input: 'text-match',
+        input: 'my-repo',
         matchKind: 'repo',
         repo: {
           aliases: [],
-          id: 'text-match',
-          label: 'text-match',
-          name: 'text-match',
-          relativePath: 'text-match',
-          repoPath: '/tmp/text-match',
+          id: 'my-repo',
+          label: 'my-repo',
+          name: 'my-repo',
+          relativePath: 'my-repo',
+          repoPath: '/tmp/my-repo',
         },
-        source: 'auto',
-        workspaceLabel: 'text-match',
-        workspacePath: '/tmp/text-match',
+        source: 'manual',
+        workspaceLabel: 'my-repo',
+        workspacePath: '/tmp/my-repo',
       },
     };
     const resolver = {
-      resolveFromText: vi.fn().mockReturnValue(unique),
-      resolveManualInput: vi.fn(),
+      resolveFromText: vi.fn(),
+      resolveManualInput: vi.fn().mockReturnValue(preferenceResolution),
     } as unknown as WorkspaceResolver;
     const preferenceStore = createMockChannelPreferenceStore('my-repo');
 
@@ -178,11 +177,12 @@ describe('resolveWorkspaceForConversation', () => {
       'C123',
     );
 
-    expect(result).toEqual(unique);
-    expect(resolver.resolveManualInput).not.toHaveBeenCalled();
+    expect(result).toEqual(preferenceResolution);
+    expect(resolver.resolveManualInput).toHaveBeenCalledWith('my-repo', 'manual');
+    expect(resolver.resolveFromText).not.toHaveBeenCalled();
   });
 
-  it('ignores channel preference when preference resolution is missing', () => {
+  it('falls back to resolver when channel preference fails to resolve', () => {
     const missing: WorkspaceResolution = { status: 'missing', query: 'hello', reason: 'no match' };
     const resolver = {
       resolveFromText: vi.fn().mockReturnValue(missing),
@@ -200,6 +200,7 @@ describe('resolveWorkspaceForConversation', () => {
 
     expect(result).toEqual(missing);
     expect(resolver.resolveManualInput).toHaveBeenCalledWith('unknown-repo', 'manual');
+    expect(resolver.resolveFromText).toHaveBeenCalledWith('hello', 'auto');
   });
 });
 

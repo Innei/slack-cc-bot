@@ -78,6 +78,7 @@ describe('Slack loading status test', () => {
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
       analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -554,6 +555,7 @@ describe('Slack loading status test', () => {
     const executor = new ClaudeAgentSdkExecutor(logger, memoryStore);
     const handler = createAppMentionHandler({
       analyticsStore: { upsert: vi.fn() } as SessionAnalyticsStore,
+      channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
       claudeExecutor: executor,
       logger,
       memoryStore,
@@ -672,7 +674,6 @@ describe('Slack loading status test', () => {
       ]),
     );
   });
-
 
   it('returns a helpful message when recall_memory requests workspace scope without a workspace', async () => {
     const search = vi.fn(() => []);
