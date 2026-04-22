@@ -245,7 +245,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'Thinking...',
+      status: 'is thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(
@@ -619,7 +619,7 @@ describe('Slack loading status test', () => {
     expect(statusCalls[0]).toMatchObject({
       channel_id: 'C123',
       loading_messages: expect.arrayContaining([expect.any(String)]),
-      status: 'Thinking...',
+      status: 'is thinking...',
       thread_ts: threadTs,
     });
     expect(statusCalls).toEqual(

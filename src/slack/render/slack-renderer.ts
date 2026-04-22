@@ -23,6 +23,19 @@ function isThinkingStatus(status: string | undefined): boolean {
   return !status || status === DEFAULT_ASSISTANT_THINKING_STATUS || THINKING_STATUS_SET.has(status);
 }
 
+// Slack renders `assistant.threads.setStatus` output as "{AppName} {status}"
+// and each `loading_messages` entry the same way — it does NOT auto-prepend
+// "is". Wrap each fragment with a leading "is " (and lowercase the first
+// letter) so it reads as "cc-001 is turning the question over..." instead of
+// "cc-001 Turning the question over...".
+function toSlackStatusFragment(text: string): string {
+  if (!text) return text;
+  if (text.startsWith('is ')) return text;
+  const first = text.charCodeAt(0);
+  const head = first >= 65 && first <= 90 ? text[0]!.toLowerCase() : text[0]!;
+  return `is ${head}${text.slice(1)}`;
+}
+
 interface RendererUiState {
   clear: boolean;
   composing?: boolean | undefined;
@@ -116,7 +129,7 @@ export class SlackRenderer {
     let rotationIndex = 0;
     const timer = setInterval(() => {
       rotationIndex++;
-      const status = rotateThinkingStatus(rotationIndex);
+      const status = toSlackStatusFragment(rotateThinkingStatus(rotationIndex));
       client.assistant.threads
         .setStatus({ channel_id: channelId, thread_ts: threadTs, status })
         .catch(() => {});
@@ -146,24 +159,26 @@ export class SlackRenderer {
       return;
     }
 
+    const renderedStatus = toSlackStatusFragment(state.status ?? '');
+    const renderedLoadingMessages = state.loadingMessages?.map(toSlackStatusFragment);
     await this.withSlackTiming(
       'assistant.threads.setStatus',
-      `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(state.status ?? '')} loadingMessages=${state.loadingMessages?.length ?? 0}`,
+      `channel=${channelId} thread=${state.threadTs} clear=false status=${JSON.stringify(renderedStatus)} loadingMessages=${renderedLoadingMessages?.length ?? 0}`,
       async () =>
         client.assistant.threads.setStatus({
           channel_id: channelId,
           thread_ts: state.threadTs,
-          status: state.status ?? '',
-          ...(state.loadingMessages ? { loading_messages: state.loadingMessages } : {}),
+          status: renderedStatus,
+          ...(renderedLoadingMessages ? { loading_messages: renderedLoadingMessages } : {}),
         }),
     );
     await this.statusProbe?.recordStatus({
       channelId,
       clear: false,
       kind: 'status',
-      ...(state.loadingMessages ? { loadingMessages: [...state.loadingMessages] } : {}),
+      ...(renderedLoadingMessages ? { loadingMessages: [...renderedLoadingMessages] } : {}),
       recordedAt: new Date().toISOString(),
-      status: state.status ?? '',
+      status: renderedStatus,
       threadTs: state.threadTs,
     });
   }
