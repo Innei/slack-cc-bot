@@ -1,10 +1,16 @@
-import 'dotenv/config';
-
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveKaguraPaths } from '@kagura/cli/config/paths';
 import { createEnv } from '@t3-oss/env-core';
+import dotenv from 'dotenv';
 import { z } from 'zod';
+
+const kaguraPaths = resolveKaguraPaths();
+if (fs.existsSync(kaguraPaths.envFile)) {
+  dotenv.config({ path: kaguraPaths.envFile, override: false });
+}
+dotenv.config({ override: false }); // dev mode: also read cwd .env if present
 
 const booleanStringSchema = z.enum(['true', 'false']).transform((value) => value === 'true');
 const optionalPositiveInteger = z.coerce.number().int().positive().optional();
@@ -40,8 +46,8 @@ const appConfigSchema = z
 type AppConfig = z.infer<typeof appConfigSchema>;
 
 function loadAppConfig(): AppConfig {
-  const configPath = process.env.APP_CONFIG_PATH?.trim() || './config.json';
-  const resolved = path.resolve(process.cwd(), configPath);
+  const override = process.env.APP_CONFIG_PATH?.trim();
+  const resolved = override ? path.resolve(process.cwd(), override) : kaguraPaths.configJsonFile;
   if (!fs.existsSync(resolved)) {
     return {};
   }

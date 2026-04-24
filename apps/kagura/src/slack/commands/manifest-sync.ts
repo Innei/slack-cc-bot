@@ -1,6 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveKaguraPaths } from '@kagura/cli/config/paths';
+
 import type { AppLogger } from '~/logger/index.js';
 
 interface SlackManifestSlashCommand {
@@ -131,7 +133,7 @@ export interface ManifestSyncOptions {
 
 export async function syncSlashCommands(options: ManifestSyncOptions): Promise<void> {
   const { appId, logger } = options;
-  const tokenStorePath = options.tokenStorePath ?? './data/slack-config-tokens.json';
+  const tokenStorePath = options.tokenStorePath ?? resolveKaguraPaths().tokenStore;
 
   logger.info('Checking slash command registration for app %s...', appId);
 

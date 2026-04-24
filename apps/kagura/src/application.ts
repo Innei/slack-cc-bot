@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
+import { resolveKaguraPaths } from '@kagura/cli/config/paths';
 import type { App } from '@slack/bolt';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
@@ -38,7 +39,11 @@ export function createApplication(): RuntimeApplication {
   const logger = createRootLogger().withTag('bootstrap');
   validateLiveE2EEnv();
 
-  const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
+  const kaguraPaths = resolveKaguraPaths();
+  const dbPath =
+    env.SESSION_DB_PATH === './data/sessions.db'
+      ? kaguraPaths.dbPath
+      : path.resolve(process.cwd(), env.SESSION_DB_PATH);
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));

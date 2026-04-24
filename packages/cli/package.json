@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./config/paths": "./src/config/paths.ts",
+    "./config/env-loader": "./src/config/env-loader.ts",
+    "./config/env-writer": "./src/config/env-writer.ts",
+    "./config/json-writer": "./src/config/json-writer.ts"
   },
   "scripts": {
     "test": "vitest run",
