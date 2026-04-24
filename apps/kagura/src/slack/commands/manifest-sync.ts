@@ -2,23 +2,15 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { resolveKaguraPaths } from '@kagura/cli/config/paths';
+import {
+  DESIRED_BOT_EVENTS,
+  DESIRED_COMMANDS,
+  DESIRED_SHORTCUTS,
+  type SlackManifestShortcut,
+  type SlackManifestSlashCommand,
+} from '@kagura/cli/slack/manifest-template';
 
 import type { AppLogger } from '~/logger/index.js';
-
-interface SlackManifestSlashCommand {
-  command: string;
-  description: string;
-  should_escape?: boolean;
-  url?: string;
-  usage_hint?: string;
-}
-
-interface SlackManifestShortcut {
-  callback_id: string;
-  description: string;
-  name: string;
-  type: 'global' | 'message';
-}
 
 interface SlackManifestBotUser {
   [key: string]: unknown;
@@ -73,55 +65,6 @@ interface PersistedTokens {
   refreshToken: string;
   updatedAt: string;
 }
-
-const DESIRED_COMMANDS: SlackManifestSlashCommand[] = [
-  {
-    command: '/usage',
-    description: 'Show bot usage stats (sessions, memories, repos, uptime)',
-    usage_hint: ' ',
-  },
-  {
-    command: '/workspace',
-    description: 'List available workspaces or look up a specific one',
-    usage_hint: '[repo-name]',
-  },
-  {
-    command: '/memory',
-    description: 'View or manage workspace memories',
-    usage_hint: 'list|count|clear <repo>',
-  },
-  {
-    command: '/session',
-    description: 'View session overview or inspect a specific session',
-    usage_hint: '[thread_ts]',
-  },
-  {
-    command: '/provider',
-    description: 'View or switch the AI provider for this thread',
-    usage_hint: '[list|reset|<provider-id>]',
-  },
-  {
-    command: '/version',
-    description: 'Show the current bot deployment version (git commit hash)',
-    usage_hint: ' ',
-  },
-];
-
-const DESIRED_SHORTCUTS: SlackManifestShortcut[] = [
-  {
-    name: 'Stop Reply',
-    type: 'message',
-    callback_id: 'stop_reply_action',
-    description: "Stop the bot's in-progress reply in this thread",
-  },
-];
-
-const DESIRED_BOT_EVENTS = [
-  'app_home_opened',
-  'app_mention',
-  'message.channels',
-  'message.im',
-] as const;
 
 export interface ManifestSyncOptions {
   appId: string;
