@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 import { runCli } from '@kagura/cli';
 
-import { startApp } from './start-app.js';
+async function startApp(): Promise<void> {
+  const mod = await import('./start-app.js');
+  await mod.startApp();
+}
 
 runCli(process.argv, { startApp }).then(
   (code) => process.exit(code),

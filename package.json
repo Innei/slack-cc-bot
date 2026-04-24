@@ -5,6 +5,12 @@
   "type": "module",
   "scripts": {
     "build": "pnpm -F @innei/kagura build",
+    "cli": "pnpm -F @innei/kagura exec tsx src/cli.ts",
+    "cli:dist": "node apps/kagura/dist/cli.js",
+    "cli:doctor": "pnpm -F @innei/kagura exec tsx src/cli.ts doctor",
+    "cli:init": "pnpm -F @innei/kagura exec tsx src/cli.ts init",
+    "cli:manifest": "pnpm -F @innei/kagura exec tsx src/cli.ts manifest",
+    "cli:path": "pnpm -F @innei/kagura exec tsx src/cli.ts config path",
     "db:generate": "pnpm -F @innei/kagura db:generate",
     "db:migrate": "pnpm -F @innei/kagura db:migrate",
     "db:studio": "pnpm -F @innei/kagura db:studio",
@@ -17,7 +23,11 @@
     "lint:fix": "eslint . --fix",
     "start": "pnpm -F @innei/kagura start",
     "test": "pnpm -r --if-present run test",
-    "typecheck": "pnpm -r --if-present run typecheck"
+    "test:app": "pnpm -F @innei/kagura test",
+    "test:cli": "pnpm -F @kagura/cli test",
+    "typecheck": "pnpm -r --if-present run typecheck",
+    "typecheck:app": "pnpm -F @innei/kagura typecheck",
+    "typecheck:cli": "pnpm -F @kagura/cli typecheck"
   },
   "simple-git-hooks": {
     "pre-commit": "pnpm exec lint-staged"
