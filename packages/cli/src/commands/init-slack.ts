@@ -12,6 +12,35 @@ import { buildPrefillUrl } from '../slack/prefill-url.js';
 
 const SLACK_AUTH_TEST = 'https://slack.com/api/auth.test';
 
+const SLACK_REQUIRED_KEYS = [
+  'SLACK_APP_ID',
+  'SLACK_BOT_TOKEN',
+  'SLACK_APP_TOKEN',
+  'SLACK_SIGNING_SECRET',
+] as const;
+
+function ensureEnvSkeleton(envFile: string): void {
+  if (fs.existsSync(envFile)) return;
+  const header = [
+    '# Slack secrets — fill these in, then run `kagura` again.',
+    '# See https://api.slack.com/apps for where to find them.',
+    ...SLACK_REQUIRED_KEYS.map((k) => `# ${k}=`),
+    '',
+  ].join('\n');
+  fs.mkdirSync(path.dirname(envFile), { recursive: true });
+  fs.writeFileSync(envFile, header, 'utf8');
+}
+
+function noteSkipped(envFile: string): void {
+  ensureEnvSkeleton(envFile);
+  p.note(
+    `Slack tokens are still required before kagura can start.\n` +
+      `Re-run \`kagura init\` to fill them in,\n` +
+      `or edit ${envFile} directly (placeholders added).`,
+    'Slack setup skipped',
+  );
+}
+
 export interface SlackOnboardingOptions {
   allowSkip: boolean;
 }
@@ -26,7 +55,10 @@ export async function runSlackOnboarding(
     ...(opts.allowSkip ? [{ value: 'skip' as const, label: 'Skip (dev / come back later)' }] : []),
   ];
   const mode = await p.select({ message: 'Slack app', options });
-  if (p.isCancel(mode) || mode === 'skip') return;
+  if (p.isCancel(mode) || mode === 'skip') {
+    noteSkipped(paths.envFile);
+    return;
+  }
 
   if (mode === 'new') {
     await handleNewApp(paths);
@@ -76,32 +108,48 @@ async function handleNewApp(paths: KaguraPaths): Promise<void> {
       );
     }
     const appId = await p.text({ message: 'SLACK_APP_ID' });
-    if (p.isCancel(appId)) return;
+    if (p.isCancel(appId)) {
+      noteSkipped(paths.envFile);
+      return;
+    }
     const signingSecret = await p.password({ message: 'SLACK_SIGNING_SECRET' });
-    if (p.isCancel(signingSecret)) return;
+    if (p.isCancel(signingSecret)) {
+      noteSkipped(paths.envFile);
+      return;
+    }
     writeEnvFile(paths.envFile, {
       SLACK_APP_ID: String(appId),
       SLACK_SIGNING_SECRET: String(signingSecret),
     });
   }
 
-  const botToken = await promptAndVerifyToken('SLACK_BOT_TOKEN (xoxb-)', 'bot');
-  const appToken = await promptAndVerifyToken('SLACK_APP_TOKEN (xapp-)', 'app');
+  const botToken = await promptAndVerifyToken('SLACK_BOT_TOKEN (xoxb-)', 'bot', paths.envFile);
+  if (botToken === undefined) return;
+  const appToken = await promptAndVerifyToken('SLACK_APP_TOKEN (xapp-)', 'app', paths.envFile);
+  if (appToken === undefined) return;
   writeEnvFile(paths.envFile, { SLACK_BOT_TOKEN: botToken, SLACK_APP_TOKEN: appToken });
 }
 
 async function handleReuseApp(paths: KaguraPaths): Promise<void> {
   const appId = await p.text({ message: 'SLACK_APP_ID' });
-  if (p.isCancel(appId)) return;
+  if (p.isCancel(appId)) {
+    noteSkipped(paths.envFile);
+    return;
+  }
   const signingSecret = await p.password({ message: 'SLACK_SIGNING_SECRET' });
-  if (p.isCancel(signingSecret)) return;
+  if (p.isCancel(signingSecret)) {
+    noteSkipped(paths.envFile);
+    return;
+  }
   writeEnvFile(paths.envFile, {
     SLACK_APP_ID: String(appId),
     SLACK_SIGNING_SECRET: String(signingSecret),
   });
 
-  const botToken = await promptAndVerifyToken('SLACK_BOT_TOKEN (xoxb-)', 'bot');
-  const appToken = await promptAndVerifyToken('SLACK_APP_TOKEN (xapp-)', 'app');
+  const botToken = await promptAndVerifyToken('SLACK_BOT_TOKEN (xoxb-)', 'bot', paths.envFile);
+  if (botToken === undefined) return;
+  const appToken = await promptAndVerifyToken('SLACK_APP_TOKEN (xapp-)', 'app', paths.envFile);
+  if (appToken === undefined) return;
   writeEnvFile(paths.envFile, { SLACK_BOT_TOKEN: botToken, SLACK_APP_TOKEN: appToken });
 }
 
@@ -116,10 +164,17 @@ async function ensureConfigToken(): Promise<string | undefined> {
   return current;
 }
 
-async function promptAndVerifyToken(message: string, kind: 'bot' | 'app'): Promise<string> {
+async function promptAndVerifyToken(
+  message: string,
+  kind: 'bot' | 'app',
+  envFile: string,
+): Promise<string | undefined> {
   for (;;) {
     const raw = await p.password({ message });
-    if (p.isCancel(raw)) throw new Error('cancelled');
+    if (p.isCancel(raw)) {
+      noteSkipped(envFile);
+      return undefined;
+    }
     const token = String(raw).trim();
     if (await verifyToken(token, kind)) return token;
     p.log.error('Token rejected by Slack — please retry.');

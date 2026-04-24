@@ -65,8 +65,10 @@ describe('runInit · end-to-end', () => {
     expect(cfg.defaultProviderId).toBe('claude-code');
     expect(cfg.repoRootDir).toBe('/tmp/my-repos');
 
-    // Slack skip → no .env writes from init (provider oauth also writes no env)
-    expect(fs.existsSync(path.join(tmp, '.env'))).toBe(false);
+    // Slack skip → .env contains only commented-out placeholders, no real values
+    const envRaw = fs.readFileSync(path.join(tmp, '.env'), 'utf8');
+    expect(envRaw).toContain('# SLACK_BOT_TOKEN=');
+    expect(envRaw).not.toMatch(/^SLACK_BOT_TOKEN=/m);
     expect(openMock).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
   });
