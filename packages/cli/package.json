@@ -1,0 +1,20 @@
+{
+  "name": "@kagura/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "25.5.2",
+    "typescript": "^6.0.2",
+    "vitest": "4.1.2"
+  }
+}
