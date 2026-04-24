@@ -69,6 +69,19 @@ function isAbortError(error: unknown): boolean {
   return error instanceof Error && error.name === 'AbortError';
 }
 
+function isMissingResumeThreadError(message: string, stderrLines: string[]): boolean {
+  const haystack = `${message}\n${stderrLines.join('\n')}`;
+  return haystack.includes('thread/resume failed: no rollout found for thread id');
+}
+
+function formatErrorWithStderr(message: string, stderrLines: string[]): string {
+  const tail = stderrLines.slice(-3).join('\n').trim();
+  if (!tail || message.includes(tail)) {
+    return message;
+  }
+  return `${message}\n${tail}`;
+}
+
 export class CodexCliExecutor implements AgentExecutor {
   readonly providerId = 'codex-cli';
   private readonly activeExecutions = new Set<Promise<void>>();
@@ -118,6 +131,7 @@ export class CodexCliExecutor implements AgentExecutor {
     let resumeHandle = request.resumeHandle;
     let started = false;
     let abortCleanup: (() => void) | undefined;
+    const stderrLines: string[] = [];
 
     this.logger.info(
       'Codex CLI execution requested (execution=%s thread=%s channel=%s user=%s resume=%s cwd=%s)',
@@ -141,7 +155,7 @@ export class CodexCliExecutor implements AgentExecutor {
       });
 
       abortCleanup = this.attachAbortHandler(child, request.abortSignal);
-      const stderrPromise = this.captureStderr(child, executionId, request.threadTs);
+      const stderrPromise = this.captureStderr(child, executionId, request.threadTs, stderrLines);
       const stdoutPromise = this.consumeStdout(child, sink, {
         getDurationMs: () => Date.now() - executionStartedAt,
         getResumeHandle: () => resumeHandle,
@@ -212,7 +226,27 @@ export class CodexCliExecutor implements AgentExecutor {
         return;
       }
 
-      const message = error instanceof Error ? error.message : String(error);
+      const message = formatErrorWithStderr(
+        error instanceof Error ? error.message : String(error),
+        stderrLines,
+      );
+      if (
+        request.resumeHandle &&
+        !started &&
+        isMissingResumeThreadError(message, stderrLines) &&
+        !request.abortSignal?.aborted
+      ) {
+        this.logger.warn(
+          'Codex CLI resume handle was not found (execution=%s thread=%s resume=%s); retrying without resume',
+          executionId,
+          request.threadTs,
+          request.resumeHandle,
+        );
+        const freshRequest: AgentExecutionRequest = { ...request };
+        delete freshRequest.resumeHandle;
+        await this.executeInternal(freshRequest, sink);
+        return;
+      }
       this.logger.error(
         'Codex CLI execution failed (execution=%s thread=%s): %s',
         executionId,
@@ -358,6 +392,7 @@ export class CodexCliExecutor implements AgentExecutor {
     child: ChildProcessWithoutNullStreams,
     executionId: string,
     threadTs: string,
+    stderrLines: string[],
   ): Promise<void> {
     const rl = readline.createInterface({ input: child.stderr });
     for await (const line of rl) {
@@ -365,6 +400,7 @@ export class CodexCliExecutor implements AgentExecutor {
       if (text.length === 0 || text === 'Reading additional input from stdin...') {
         continue;
       }
+      stderrLines.push(text);
       this.logger.info(
         'Codex CLI stderr (execution=%s thread=%s): %s',
         executionId,

@@ -250,6 +250,63 @@ describe('CodexCliExecutor', () => {
     );
   });
 
+  it('retries without resume when Codex no longer has the saved rollout', async () => {
+    spawnMock
+      .mockImplementationOnce(
+        () =>
+          new FakeCodexProcess((_prompt, child) => {
+            queueMicrotask(() => {
+              child.stderr.write(
+                'Error: thread/resume: thread/resume failed: no rollout found for thread id codex-thread-1\n',
+              );
+              child.stdout.end();
+              child.stderr.end();
+              child.emit('exit', 1, null);
+            });
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new FakeCodexProcess((_prompt, child) => {
+            queueMicrotask(() => {
+              writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-2' });
+              writeJson(child, {
+                type: 'item.completed',
+                item: { id: 'msg-1', type: 'agent_message', text: 'fresh session' },
+              });
+              writeJson(child, { type: 'turn.completed', usage: {} });
+              child.stdout.end();
+              child.stderr.end();
+              child.emit('exit', 0, null);
+            });
+          }),
+      );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(
+      createRequest({ resumeHandle: 'codex-thread-1' }),
+      createSink(events),
+    );
+
+    expect(spawnMock).toHaveBeenCalledTimes(2);
+    expect(spawnMock.mock.calls[0]?.[1]).toEqual(
+      expect.arrayContaining(['exec', 'resume', 'codex-thread-1', '-']),
+    );
+    expect(spawnMock.mock.calls[1]?.[1]).toEqual(
+      expect.not.arrayContaining(['resume', 'codex-thread-1']),
+    );
+    expect(events).not.toContainEqual(expect.objectContaining({ phase: 'failed' }));
+    expect(events).toContainEqual({
+      type: 'assistant-message',
+      text: 'fresh session',
+    });
+    expect(events.at(-1)).toEqual({
+      type: 'lifecycle',
+      phase: 'completed',
+      resumeHandle: 'codex-thread-2',
+    });
+  });
+
   it('emits generated-images for new Codex artifact files', async () => {
     const workspacePath = mkdtempSync(path.join(tmpdir(), 'codex-artifacts-'));
     const imagePath = path.join(workspacePath, CODEX_GENERATED_ARTIFACTS_DIR, 'blue.png');
