@@ -53,6 +53,7 @@ export interface ThreadConversationMessage {
 
 export interface ThreadConversationOptions {
   addAcknowledgementReaction: boolean;
+  currentBotUserId?: string | undefined;
   forceNewSession?: boolean;
   logLabel: string;
   rootMessageTs: string;

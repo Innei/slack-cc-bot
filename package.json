@@ -13,7 +13,6 @@
     "e2e": "tsx packages/live-cli/src/cli.ts run",
     "e2e:interactive": "tsx packages/live-cli/src/cli.ts run --interactive",
     "e2e:list": "tsx packages/live-cli/src/cli.ts list",
-    "e2e:skill-gating:local": "tsx src/e2e/local/verify-claude-skill-gating.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",

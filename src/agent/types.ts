@@ -11,6 +11,7 @@ export type GeneratedImageFile = GeneratedOutputFile;
 
 export interface AgentExecutionRequest {
   abortSignal?: AbortSignal;
+  botUserId?: string;
   channelId: string;
   contextMemories?: ContextMemories;
   currentTriggerTs?: string;

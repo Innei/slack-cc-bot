@@ -16,7 +16,7 @@ import { env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
-import { createSlackApp } from '~/slack/app.js';
+import { createSlackApp, type SlackAppCredentials } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
 import {
   createThreadExecutionRegistry,
@@ -34,11 +34,21 @@ export interface RuntimeApplication {
   readonly threadExecutionRegistry: ThreadExecutionRegistry;
 }
 
-export function createApplication(): RuntimeApplication {
-  const logger = createRootLogger().withTag('bootstrap');
+export interface RuntimeApplicationOptions {
+  defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
+  executionProbePath?: string | undefined;
+  instanceLabel?: string | undefined;
+  sessionDbPath?: string | undefined;
+  skipManifestSync?: boolean | undefined;
+  slackCredentials?: SlackAppCredentials | undefined;
+  statusProbePath?: string | undefined;
+}
+
+export function createApplication(options?: RuntimeApplicationOptions): RuntimeApplication {
+  const logger = createRootLogger().withTag(options?.instanceLabel ?? 'bootstrap');
   validateLiveE2EEnv();
 
-  const dbPath = path.resolve(process.cwd(), env.SESSION_DB_PATH);
+  const dbPath = path.resolve(process.cwd(), options?.sessionDbPath ?? env.SESSION_DB_PATH);
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
@@ -54,10 +64,12 @@ export function createApplication(): RuntimeApplication {
     scanDepth: env.REPO_SCAN_DEPTH,
   });
   const statusProbe = env.SLACK_E2E_ENABLED
-    ? new FileSlackStatusProbe(env.SLACK_E2E_STATUS_PROBE_PATH)
+    ? new FileSlackStatusProbe(options?.statusProbePath ?? env.SLACK_E2E_STATUS_PROBE_PATH)
     : undefined;
   const executionProbe = env.SLACK_E2E_ENABLED
-    ? new FileClaudeExecutionProbe(env.SLACK_E2E_EXECUTION_PROBE_PATH)
+    ? new FileClaudeExecutionProbe(
+        options?.executionProbePath ?? env.SLACK_E2E_EXECUTION_PROBE_PATH,
+      )
     : undefined;
   const permissionBridge = new SlackPermissionBridge(logger.withTag('slack:permission'));
   const userInputBridge = new SlackUserInputBridge(logger.withTag('slack:user-input'));
@@ -70,7 +82,7 @@ export function createApplication(): RuntimeApplication {
   );
   const codexExecutor = new CodexCliExecutor(logger.withTag('codex:session'), memoryStore);
   const providerRegistry = createProviderRegistry(
-    env.AGENT_DEFAULT_PROVIDER,
+    options?.defaultProviderId ?? env.AGENT_DEFAULT_PROVIDER,
     new Map<string, AgentExecutor>([
       ['claude-code', ccExecutor],
       ['codex-cli', codexExecutor],
@@ -81,29 +93,37 @@ export function createApplication(): RuntimeApplication {
     logger: logger.withTag('slack:execution'),
   });
 
-  const slackApp: App = createSlackApp({
-    analyticsStore,
-    channelPreferenceStore,
-    logger,
-    memoryStore,
-    permissionBridge,
-    sessionStore,
-    providerRegistry,
-    threadExecutionRegistry,
-    userInputBridge,
-    workspaceResolver,
-    ...(statusProbe ? { statusProbe } : {}),
-  });
+  const slackApp: App = createSlackApp(
+    {
+      analyticsStore,
+      channelPreferenceStore,
+      logger,
+      memoryStore,
+      permissionBridge,
+      sessionStore,
+      providerRegistry,
+      threadExecutionRegistry,
+      userInputBridge,
+      workspaceResolver,
+      ...(statusProbe ? { statusProbe } : {}),
+    },
+    options?.slackCredentials ? { credentials: options.slackCredentials } : undefined,
+  );
 
   return {
     logger,
     threadExecutionRegistry,
     async start() {
-      if (env.SLACK_APP_ID && (env.SLACK_CONFIG_TOKEN || env.SLACK_CONFIG_REFRESH_TOKEN)) {
+      if (
+        !options?.skipManifestSync &&
+        env.SLACK_APP_ID &&
+        (env.SLACK_CONFIG_TOKEN || env.SLACK_CONFIG_REFRESH_TOKEN)
+      ) {
         await syncSlashCommands({
           appId: env.SLACK_APP_ID,
           configToken: env.SLACK_CONFIG_TOKEN,
           refreshToken: env.SLACK_CONFIG_REFRESH_TOKEN,
+          tokenStorePath: env.SLACK_CONFIG_TOKEN_STORE_PATH,
           logger: logger.withTag('manifest'),
         }).catch((error) => {
           logger.warn(

@@ -4,14 +4,7 @@ import { promisify } from 'node:util';
 import type { CanUseTool, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-import type {
-  AgentExecutionRequest,
-  AgentExecutionSink,
-  AgentExecutor,
-  AgentUserInputOption,
-  AgentUserInputQuestion,
-  AgentUserInputRequest,
-} from '~/agent/types.js';
+import type { AgentExecutionRequest, AgentExecutionSink, AgentExecutor } from '~/agent/types.js';
 import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import { env } from '~/env/server.js';
 import type { AppLogger } from '~/logger/index.js';
@@ -530,9 +523,8 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
   } {
     const skillsEnabled = env.CLAUDE_ENABLE_SKILLS;
     const hasPermissionBridge = !!sink.requestPermission;
-    const hasUserInputBridge = !!sink.requestUserInput;
 
-    if (!skillsEnabled && !hasPermissionBridge && !hasUserInputBridge) {
+    if (!skillsEnabled && !hasPermissionBridge) {
       return {};
     }
 
@@ -552,39 +544,13 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           };
         }
 
-        // --- AskUserQuestion (bridge to Slack thread reply, always available) ---
+        // AskUserQuestion is intentionally disabled. Agents should ask visibly in
+        // Slack with an explicit mention and numbered choices instead.
         if (toolName === 'AskUserQuestion') {
-          const userInputRequest = parseAgentUserInputRequest(input);
-          if (!userInputRequest) {
-            return {
-              behavior: 'deny',
-              message: 'The Slack host received an invalid AskUserQuestion payload.',
-            };
-          }
-
-          if (!sink.requestUserInput) {
-            return {
-              behavior: 'deny',
-              message:
-                'The Slack host does not yet bridge AskUserQuestion. Ask the user your clarifying questions in normal assistant text instead.',
-            };
-          }
-
-          const response = await sink.requestUserInput(userInputRequest, {
-            description: options.description,
-            displayName: options.displayName,
-            signal: options.signal,
-            title: options.title,
-            toolUseId: options.toolUseID,
-          });
-
           return {
-            behavior: 'allow',
-            updatedInput: {
-              ...input,
-              answers: response.answers,
-              ...(response.annotations ? { annotations: response.annotations } : {}),
-            },
+            behavior: 'deny',
+            message:
+              'AskUserQuestion is disabled in this Slack host. Ask visibly in the Slack thread, mention the responsible user or agent, present numbered choices if useful, and wait for their reply.',
           };
         }
 
@@ -695,77 +661,4 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       state,
     });
   }
-}
-
-function parseAgentUserInputRequest(
-  input: Record<string, unknown>,
-): AgentUserInputRequest | undefined {
-  if (!Array.isArray(input.questions) || input.questions.length === 0) {
-    return undefined;
-  }
-
-  const questions: AgentUserInputQuestion[] = [];
-  for (const rawQuestion of input.questions) {
-    if (!rawQuestion || typeof rawQuestion !== 'object') {
-      return undefined;
-    }
-
-    const question = readString((rawQuestion as Record<string, unknown>).question);
-    const header = readString((rawQuestion as Record<string, unknown>).header);
-    const options = parseAgentUserInputOptions((rawQuestion as Record<string, unknown>).options);
-    if (!question || !header || options.length === 0) {
-      return undefined;
-    }
-
-    questions.push({
-      header,
-      multiSelect:
-        typeof (rawQuestion as Record<string, unknown>).multiSelect === 'boolean'
-          ? ((rawQuestion as Record<string, unknown>).multiSelect as boolean)
-          : undefined,
-      options,
-      question,
-    });
-  }
-
-  const request: AgentUserInputRequest = { questions };
-  if (input.metadata && typeof input.metadata === 'object') {
-    const source = readString((input.metadata as Record<string, unknown>).source);
-    if (source) {
-      request.metadata = { source };
-    }
-  }
-  return request;
-}
-
-function parseAgentUserInputOptions(value: unknown): AgentUserInputOption[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  const options: AgentUserInputOption[] = [];
-  for (const rawOption of value) {
-    if (!rawOption || typeof rawOption !== 'object') {
-      return [];
-    }
-
-    const label = readString((rawOption as Record<string, unknown>).label);
-    const description = readString((rawOption as Record<string, unknown>).description);
-    if (!label || !description) {
-      return [];
-    }
-
-    const preview = readString((rawOption as Record<string, unknown>).preview);
-    options.push({
-      description,
-      label,
-      ...(preview ? { preview } : {}),
-    });
-  }
-
-  return options;
-}
-
-function readString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value : undefined;
 }

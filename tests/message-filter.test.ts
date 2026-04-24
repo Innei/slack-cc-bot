@@ -4,6 +4,7 @@ import type { AppLogger } from '~/logger/index.js';
 import {
   createBotUserIdResolver,
   shouldSkipBotAuthoredMessage,
+  shouldSkipBotAuthoredMessageFromUnjoinedSender,
   shouldSkipMessageForForeignMention,
 } from '~/slack/ingress/message-filter.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
@@ -191,6 +192,97 @@ describe('shouldSkipMessageForForeignMention edge cases', () => {
       '<@U_BOT> and <@U456> please',
       'U_BOT',
     );
+    expect(result).toBe(true);
+  });
+});
+
+describe('shouldSkipBotAuthoredMessageFromUnjoinedSender', () => {
+  it('allows bot-authored follow-ups from the thread root author', async () => {
+    const logger = createTestLogger();
+    const client = {
+      conversations: {
+        replies: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              text: '<@U_AGENT> start',
+              ts: '1712345678.000100',
+              user: 'U_TRIGGER',
+            },
+          ],
+        }),
+      },
+    } as unknown as SlackWebClientLike;
+
+    const result = await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+      logger,
+      'test',
+      client,
+      'C123',
+      '1712345678.000100',
+      'U_TRIGGER',
+    );
+
+    expect(result).toBe(false);
+  });
+
+  it('allows bot-authored messages from a sender explicitly mentioned by another participant', async () => {
+    const logger = createTestLogger();
+    const client = {
+      conversations: {
+        replies: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              text: '<@U_AGENT> start',
+              ts: '1712345678.000100',
+              user: 'U_TRIGGER',
+            },
+            {
+              text: '<@U_SENDER> join this thread',
+              ts: '1712345678.000101',
+              user: 'U_TRIGGER',
+            },
+          ],
+        }),
+      },
+    } as unknown as SlackWebClientLike;
+
+    const result = await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+      logger,
+      'test',
+      client,
+      'C123',
+      '1712345678.000100',
+      'U_SENDER',
+    );
+
+    expect(result).toBe(false);
+  });
+
+  it('skips bot-authored messages from senders that are neither root author nor explicitly mentioned', async () => {
+    const logger = createTestLogger();
+    const client = {
+      conversations: {
+        replies: vi.fn().mockResolvedValue({
+          messages: [
+            {
+              text: '<@U_AGENT> start',
+              ts: '1712345678.000100',
+              user: 'U_TRIGGER',
+            },
+          ],
+        }),
+      },
+    } as unknown as SlackWebClientLike;
+
+    const result = await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+      logger,
+      'test',
+      client,
+      'C123',
+      '1712345678.000100',
+      'U_UNJOINED',
+    );
+
     expect(result).toBe(true);
   });
 });

@@ -15,5 +15,6 @@
   "logToFile": false,
   "repoRootDir": "~/git",
   "repoScanDepth": 2,
-  "sessionDbPath": "./data/sessions.db"
+  "sessionDbPath": "./data/sessions.db",
+  "slackConfigTokenStorePath": "./data/slack-config-tokens.json"
 }

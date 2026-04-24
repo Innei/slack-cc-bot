@@ -11,6 +11,7 @@ import { handleThreadConversation } from './conversation-pipeline.js';
 import {
   createBotUserIdResolver,
   shouldSkipBotAuthoredMessage,
+  shouldSkipBotAuthoredMessageFromUnjoinedSender,
   shouldSkipMessageForForeignMention,
 } from './message-filter.js';
 import type { SlackIngressDependencies } from './types.js';
@@ -35,10 +36,54 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 ] as const;
 
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
+  const getBotUserId = createBotUserIdResolver(deps.logger);
+
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = zodParse(SlackAppMentionEventSchema, args.event, 'SlackAppMentionEvent');
+    const client = args.client as SlackWebClientLike;
+    const threadTs = mention.thread_ts ?? mention.ts;
+    const botUserId = await getBotUserId(client);
+    const rawMention = mention as {
+      bot_id?: string | undefined;
+      subtype?: string | undefined;
+    };
+    const botAuthored = Boolean(rawMention.bot_id) || rawMention.subtype === 'bot_message';
+
+    if (
+      shouldSkipBotAuthoredMessage(
+        deps.logger,
+        'app mention',
+        threadTs,
+        {
+          bot_id: rawMention.bot_id,
+          subtype: rawMention.subtype,
+          text: mention.text,
+          user: mention.user,
+        },
+        botUserId,
+      )
+    ) {
+      return;
+    }
+
+    const existingSession = deps.sessionStore.get(threadTs);
+    if (
+      botAuthored &&
+      existingSession &&
+      (await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+        deps.logger,
+        'app mention',
+        client,
+        mention.channel,
+        threadTs,
+        mention.user,
+      ))
+    ) {
+      return;
+    }
+
     await handleThreadConversation(
-      args.client as SlackWebClientLike,
+      client,
       {
         channel: mention.channel,
         files: mention.files,
@@ -52,6 +97,7 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
       {
         logLabel: 'app mention',
         addAcknowledgementReaction: true,
+        currentBotUserId: botUserId,
         rootMessageTs: mention.ts,
       },
     );
@@ -148,6 +194,21 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       return;
     }
 
+    const botAuthored = Boolean(message.bot_id) || message.subtype === 'bot_message';
+    if (
+      botAuthored &&
+      (await shouldSkipBotAuthoredMessageFromUnjoinedSender(
+        deps.logger,
+        'thread reply',
+        client,
+        channelId,
+        threadTs,
+        typeof message.user === 'string' ? message.user : undefined,
+      ))
+    ) {
+      return;
+    }
+
     if (
       shouldSkipMessageForForeignMention(
         deps.logger,
@@ -175,6 +236,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       {
         logLabel: 'thread reply',
         addAcknowledgementReaction: false,
+        currentBotUserId: botUserId,
         rootMessageTs: session.rootMessageTs,
       },
     );

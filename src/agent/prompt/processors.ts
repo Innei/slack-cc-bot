@@ -4,12 +4,15 @@ import {
   SLACK_ATTACHMENT_CAPABILITY_LINES,
   UPLOAD_SLACK_FILE_TOOL_NAME,
 } from '~/agent/slack-runtime-tools.js';
+import type { AgentExecutionRequest } from '~/agent/types.js';
 import {
   type LoadedThreadFile,
   renderThreadPrompt,
 } from '~/slack/context/thread-context-loader.js';
 
 import type { PromptProcessor } from './types.js';
+
+const SLACK_USER_MENTION_PATTERN = /<@([\dA-Z]+)>/g;
 
 export const systemRoleProcessor: PromptProcessor = {
   name: 'system-role',
@@ -42,13 +45,15 @@ export const toolDeclarationProcessor: PromptProcessor = {
       `- ${RECALL_MEMORY_TOOL_NAME}: recall memories from previous sessions (supports global and workspace scope).`,
       `- ${SAVE_MEMORY_TOOL_NAME}: save important memories for future sessions (supports global and workspace scope).`,
       `- ${UPLOAD_SLACK_FILE_TOOL_NAME}: queue a local file from the current workspace/session root for upload into the current Slack thread.`,
-      '- AskUserQuestion: pause and ask the Slack user for a required confirmation, disambiguation, or choice before proceeding.',
+      '- AskUserQuestion is disabled in this Slack host. Do not call it.',
       '- set_channel_default_workspace: ONLY call when the user explicitly asks to set or change the workspace. NEVER call proactively — the workspace is already auto-injected in the session context.',
       '',
       'CRITICAL USER-CONFIRMATION RULES:',
-      '- If you need confirmation, approval, disambiguation, or a choice from the user, you MUST use AskUserQuestion instead of assuming an answer.',
-      '- Never say or imply that the user already confirmed unless that confirmation is present in the thread context or returned by AskUserQuestion.',
-      '- If you ask the user a question in normal assistant text, stop there and wait; do not continue as if the user answered.',
+      '- If you need confirmation, approval, disambiguation, or a choice from another participant, ask in normal Slack-visible assistant text instead of calling AskUserQuestion.',
+      '- Explicitly mention the responsible user or agent when you need a specific participant to respond.',
+      '- Present choices as a concise numbered list such as 1, 2, 3, 4, with enough detail for the participant to choose.',
+      '- After asking a question or presenting choices, stop there and wait; do not continue as if the answer was known.',
+      '- Never say or imply that the user already confirmed unless that confirmation is present in the Slack thread context.',
       '',
       ...SLACK_ATTACHMENT_CAPABILITY_LINES,
     );
@@ -93,6 +98,22 @@ export const sessionContextProcessor: PromptProcessor = {
     const lines: string[] = [
       `You are responding in channel ${request.channelId}, thread ${request.threadTs}.`,
     ];
+
+    if (request.botUserId) {
+      lines.push(
+        `Your current Slack app identity is <@${request.botUserId}> (user id ${request.botUserId}).`,
+      );
+    }
+
+    const mentionedUserIds = collectMentionedUserIds(request.threadContext.messages);
+    if (mentionedUserIds.length > 0) {
+      lines.push(
+        `Slack users/apps explicitly mentioned in this thread: ${mentionedUserIds
+          .map((id) => `<@${id}>`)
+          .join(', ')}.`,
+        'Use your current Slack app identity to distinguish instructions for you from instructions for other mentioned agents.',
+      );
+    }
 
     if (request.workspacePath) {
       lines.push(
@@ -197,6 +218,21 @@ function compareSlackTs(a: string, b: string): number {
     return na === nb ? 0 : na < nb ? -1 : 1;
   }
   return a === b ? 0 : a < b ? -1 : 1;
+}
+
+function collectMentionedUserIds(
+  messages: AgentExecutionRequest['threadContext']['messages'],
+): string[] {
+  const mentioned = new Set<string>();
+  for (const message of messages) {
+    for (const match of message.text.matchAll(SLACK_USER_MENTION_PATTERN)) {
+      const id = match[1]?.trim();
+      if (id) {
+        mentioned.add(id);
+      }
+    }
+  }
+  return [...mentioned];
 }
 
 export const fileContextProcessor: PromptProcessor = {

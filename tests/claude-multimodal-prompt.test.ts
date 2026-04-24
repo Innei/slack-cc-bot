@@ -126,15 +126,17 @@ describe('prompt assembly', () => {
       );
     });
 
-    it('instructs the model to use AskUserQuestion for confirmation instead of assuming user consent', () => {
+    it('instructs the model to ask visibly in Slack instead of using AskUserQuestion for normal confirmation', () => {
       const { systemPrompt } = assemblePrompt(baseRequest());
 
-      expect(systemPrompt).toContain('AskUserQuestion: pause and ask the Slack user');
       expect(systemPrompt).toContain(
-        'If you need confirmation, approval, disambiguation, or a choice from the user, you MUST use AskUserQuestion instead of assuming an answer.',
+        'AskUserQuestion is disabled in this Slack host. Do not call it.',
       );
       expect(systemPrompt).toContain(
-        'Never say or imply that the user already confirmed unless that confirmation is present in the thread context or returned by AskUserQuestion.',
+        'If you need confirmation, approval, disambiguation, or a choice from another participant, ask in normal Slack-visible assistant text instead of calling AskUserQuestion.',
+      );
+      expect(systemPrompt).toContain(
+        'Present choices as a concise numbered list such as 1, 2, 3, 4, with enough detail for the participant to choose.',
       );
     });
   });

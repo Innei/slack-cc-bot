@@ -58,12 +58,28 @@ export interface SlackApplicationDependencies {
   workspaceResolver: WorkspaceResolver;
 }
 
-export function createSlackApp(deps: SlackApplicationDependencies): App {
+export interface SlackAppCredentials {
+  appToken: string;
+  botToken: string;
+  signingSecret: string;
+}
+
+export function createSlackApp(
+  deps: SlackApplicationDependencies,
+  options?: {
+    credentials?: SlackAppCredentials | undefined;
+  },
+): App {
   const networkAgent = createSlackNetworkAgent();
-  const app = new App({
-    token: env.SLACK_BOT_TOKEN,
+  const credentials = options?.credentials ?? {
     appToken: env.SLACK_APP_TOKEN,
+    botToken: env.SLACK_BOT_TOKEN,
     signingSecret: env.SLACK_SIGNING_SECRET,
+  };
+  const app = new App({
+    token: credentials.botToken,
+    appToken: credentials.appToken,
+    signingSecret: credentials.signingSecret,
     socketMode: true,
     agent: networkAgent,
     clientOptions: createSlackWebClientOptions(networkAgent),

@@ -381,6 +381,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
           : {}),
         ...(resumeHandle ? { resumeHandle } : {}),
         ...(ctx.previousTurnTriggerTs ? { previousTurnTriggerTs: ctx.previousTurnTriggerTs } : {}),
+        ...(ctx.options.currentBotUserId ? { botUserId: ctx.options.currentBotUserId } : {}),
       },
       sink,
     );

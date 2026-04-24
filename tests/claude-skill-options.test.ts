@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { ChannelPreferenceStore } from '~/channel-preference/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryStore } from '~/memory/types.js';
 
@@ -26,7 +27,11 @@ describe('Claude skill permission bridge', () => {
 
   it('does not auto-approve non-skill tools when skill dispatch is enabled', async () => {
     const { ClaudeAgentSdkExecutor } = await import('~/agent/providers/claude-code/adapter.js');
-    const executor = new ClaudeAgentSdkExecutor(createTestLogger(), createMemoryStore());
+    const executor = new ClaudeAgentSdkExecutor(
+      createTestLogger(),
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
     const skillOptions = (
       executor as unknown as {
         buildToolOptions: (sink: Record<string, unknown>) => {
@@ -62,6 +67,39 @@ describe('Claude skill permission bridge', () => {
       behavior: 'deny',
     });
   });
+
+  it('denies AskUserQuestion even when a user-input bridge is present', async () => {
+    const { ClaudeAgentSdkExecutor } = await import('~/agent/providers/claude-code/adapter.js');
+    const executor = new ClaudeAgentSdkExecutor(
+      createTestLogger(),
+      createMemoryStore(),
+      createChannelPreferenceStore(),
+    );
+    const skillOptions = (
+      executor as unknown as {
+        buildToolOptions: (sink: Record<string, unknown>) => {
+          canUseTool?: (
+            toolName: string,
+            input: Record<string, unknown>,
+            options: {
+              signal: AbortSignal;
+            },
+          ) => Promise<Record<string, unknown>>;
+        };
+      }
+    ).buildToolOptions({ requestUserInput: vi.fn() });
+
+    await expect(
+      skillOptions.canUseTool?.(
+        'AskUserQuestion',
+        { questions: [] },
+        { signal: new AbortController().signal },
+      ),
+    ).resolves.toMatchObject({
+      behavior: 'deny',
+      message: expect.stringContaining('AskUserQuestion is disabled'),
+    });
+  });
 });
 
 function createTestLogger(): AppLogger {
@@ -93,4 +131,16 @@ function createMemoryStore(): MemoryStore {
     saveWithDedup: vi.fn(),
     search: () => [],
   } as unknown as MemoryStore;
+}
+
+function createChannelPreferenceStore(): ChannelPreferenceStore {
+  return {
+    get: () => undefined,
+    upsert: (channelId, defaultWorkspaceInput) => ({
+      channelId,
+      createdAt: new Date(0).toISOString(),
+      defaultWorkspaceInput,
+      updatedAt: new Date(0).toISOString(),
+    }),
+  };
 }

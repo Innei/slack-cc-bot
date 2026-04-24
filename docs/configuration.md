@@ -162,6 +162,8 @@ When `SLACK_APP_ID` is set along with `SLACK_CONFIG_REFRESH_TOKEN` (or `SLACK_CO
 
 **Token rotation:** Slack configuration tokens expire every 12 hours. If you provide `SLACK_CONFIG_REFRESH_TOKEN`, the bot calls [`tooling.tokens.rotate`](https://api.slack.com/methods/tooling.tokens.rotate) on each startup and persists the new token pair to `data/slack-config-tokens.json`. This means you only need to set the refresh token once.
 
+Set `SLACK_CONFIG_TOKEN_STORE_PATH` when running multiple app instances from the same checkout so each Slack App persists its rotated configuration token independently.
+
 To generate the tokens:
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
@@ -169,6 +171,173 @@ To generate the tokens:
 3. Click **Generate Token** -> select your workspace -> **Generate**
 4. Copy the **Refresh Token** (`xoxe-...`) into `SLACK_CONFIG_REFRESH_TOKEN`
 5. Copy the **App ID** from your app's Basic Information page into `SLACK_APP_ID`
+
+## Running multiple production instances
+
+The production model is one OS process per Slack App. Do not use the `SLACK_BOT_2_TOKEN` / `SLACK_APP_2_TOKEN` E2E variables for production startup; those exist only so live tests can start two apps inside one test process.
+
+Each instance needs its own Slack App credentials and its own local runtime state:
+
+| Per-instance value                  | Why it must be separate                                               |
+| ----------------------------------- | --------------------------------------------------------------------- |
+| `SLACK_BOT_TOKEN`                   | Identifies the Slack bot user that receives mentions                  |
+| `SLACK_APP_TOKEN`                   | Opens that Slack App's Socket Mode connection                         |
+| `SLACK_SIGNING_SECRET`              | Belongs to that Slack App                                             |
+| `SLACK_APP_ID`                      | Required if manifest sync is enabled                                  |
+| `SLACK_CONFIG_TOKEN_STORE_PATH`     | Avoids rotated config-token files overwriting each other              |
+| `APP_CONFIG_PATH`                   | Lets each Agent use a different provider/model/repo/log configuration |
+| `SESSION_DB_PATH` / `sessionDbPath` | Avoids session collisions because Slack threads share `thread_ts`     |
+| `LOG_DIR` / `logDir`                | Keeps per-Agent logs readable                                         |
+
+`REPO_ROOT_DIR` can be shared when both Agents should see the same repositories.
+
+Example files:
+
+```bash
+.env.cc001
+.env.cc002
+config.cc001.json
+config.cc002.json
+```
+
+`.env.cc001`:
+
+```dotenv
+NODE_ENV=production
+APP_CONFIG_PATH=./config.cc001.json
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_SIGNING_SECRET=...
+SLACK_APP_ID=A...
+SLACK_CONFIG_REFRESH_TOKEN=xoxe-...
+SLACK_CONFIG_TOKEN_STORE_PATH=./data/cc001/slack-config-tokens.json
+```
+
+`config.cc001.json`:
+
+```json
+{
+  "defaultProviderId": "claude-code",
+  "logDir": "./logs/cc001",
+  "repoRootDir": "~/git",
+  "sessionDbPath": "./data/cc001/sessions.db",
+  "slackConfigTokenStorePath": "./data/cc001/slack-config-tokens.json"
+}
+```
+
+`.env.cc002`:
+
+```dotenv
+NODE_ENV=production
+APP_CONFIG_PATH=./config.cc002.json
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_SIGNING_SECRET=...
+SLACK_APP_ID=A...
+SLACK_CONFIG_REFRESH_TOKEN=xoxe-...
+SLACK_CONFIG_TOKEN_STORE_PATH=./data/cc002/slack-config-tokens.json
+```
+
+`config.cc002.json`:
+
+```json
+{
+  "defaultProviderId": "codex-cli",
+  "logDir": "./logs/cc002",
+  "repoRootDir": "~/git",
+  "sessionDbPath": "./data/cc002/sessions.db",
+  "slackConfigTokenStorePath": "./data/cc002/slack-config-tokens.json"
+}
+```
+
+### Local shell
+
+`dotenv/config` supports `DOTENV_CONFIG_PATH`, so two compiled instances can be started from the same checkout:
+
+```bash
+DOTENV_CONFIG_PATH=.env.cc001 pnpm start
+DOTENV_CONFIG_PATH=.env.cc002 pnpm start
+```
+
+### PM2
+
+Use two app entries that point at different env files:
+
+```js
+module.exports = {
+  apps: [
+    {
+      name: 'kagura-cc001',
+      script: 'dist/index.js',
+      cwd: __dirname,
+      interpreter: 'node',
+      env: {
+        NODE_ENV: 'production',
+        DOTENV_CONFIG_PATH: '.env.cc001',
+      },
+    },
+    {
+      name: 'kagura-cc002',
+      script: 'dist/index.js',
+      cwd: __dirname,
+      interpreter: 'node',
+      env: {
+        NODE_ENV: 'production',
+        DOTENV_CONFIG_PATH: '.env.cc002',
+      },
+    },
+  ],
+};
+```
+
+Then run:
+
+```bash
+pnpm build
+pm2 start ecosystem.config.cjs
+```
+
+### Docker Compose
+
+With containers, give each service a different env file and data volume:
+
+```yaml
+services:
+  kagura-cc001:
+    image: kagura:local
+    env_file:
+      - .env.cc001
+    environment:
+      NODE_ENV: production
+      REPO_ROOT_DIR: /workspace
+    restart: unless-stopped
+    volumes:
+      - ${HOST_REPO_ROOT:?set HOST_REPO_ROOT}:/workspace
+      - kagura_cc001_data:/app/data
+
+  kagura-cc002:
+    image: kagura:local
+    env_file:
+      - .env.cc002
+    environment:
+      NODE_ENV: production
+      REPO_ROOT_DIR: /workspace
+    restart: unless-stopped
+    volumes:
+      - ${HOST_REPO_ROOT:?set HOST_REPO_ROOT}:/workspace
+      - kagura_cc002_data:/app/data
+
+volumes:
+  kagura_cc001_data: {}
+  kagura_cc002_data: {}
+```
+
+Build once, run both:
+
+```bash
+docker build -t kagura:local .
+docker compose up -d
+```
 
 ## Docker deployment
 
