@@ -21,7 +21,8 @@
   "author": "Innei <i@innei.dev>",
   "type": "module",
   "bin": {
-    "kagura": "./dist/index.js"
+    "kagura": "./dist/cli.js",
+    "kagura-app": "./dist/index.js"
   },
   "files": [
     "dist",
