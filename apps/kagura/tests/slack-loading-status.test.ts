@@ -673,7 +673,7 @@ describe('Slack loading status test', () => {
         {
           elements: [
             {
-              elements: [{ text: 'Claude execution failed: boom', type: 'text' }],
+              elements: [{ text: 'Agent execution failed: boom', type: 'text' }],
               type: 'rich_text_section',
             },
           ],
@@ -681,7 +681,7 @@ describe('Slack loading status test', () => {
         },
       ],
       channel: 'C123',
-      text: 'Claude execution failed: boom',
+      text: 'Agent execution failed: boom',
       thread_ts: threadTs,
     });
     expect(deleteCalls).toEqual([]);

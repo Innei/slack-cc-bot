@@ -3,10 +3,10 @@ import { redact } from '~/logger/redact.js';
 export function formatClaudeExecutionFailureReply(error: unknown): string {
   const detail = formatVisibleErrorDetail(error);
   if (!detail) {
-    return 'Claude execution failed. No error detail was provided.';
+    return 'Agent execution failed. No error detail was provided.';
   }
 
-  return `Claude execution failed: ${detail}`;
+  return `Agent execution failed: ${detail}`;
 }
 
 export function formatVisibleErrorDetail(error: unknown, maxLength = 300): string {

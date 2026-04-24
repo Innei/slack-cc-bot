@@ -161,7 +161,7 @@ describe('createActivitySink', () => {
       expect.anything(),
       'C123',
       'ts1',
-      'Claude execution failed: boom',
+      'Agent execution failed: boom',
     );
   });
 
@@ -186,7 +186,7 @@ describe('createActivitySink', () => {
       expect.anything(),
       'C123',
       'ts1',
-      'Claude execution failed: request failed with Bearer [REDACTED] and [REDACTED]',
+      'Agent execution failed: request failed with Bearer [REDACTED] and [REDACTED]',
     );
   });
 
@@ -555,7 +555,7 @@ describe('createActivitySink', () => {
       expect.anything(),
       'C123',
       'ts1',
-      expect.stringContaining('Claude execution failed'),
+      expect.stringContaining('Agent execution failed'),
     );
   });
 
