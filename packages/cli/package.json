@@ -16,7 +16,11 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.tests.json --noEmit"
   },
   "dependencies": {
-    "dotenv": "17.4.0"
+    "@clack/prompts": "^0.11.0",
+    "commander": "^13.0.0",
+    "dotenv": "17.4.0",
+    "open": "^10.1.0",
+    "picocolors": "^1.1.0"
   },
   "devDependencies": {
     "@types/node": "25.5.2",

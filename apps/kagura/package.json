@@ -47,8 +47,12 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.92",
+    "@clack/prompts": "^0.11.0",
     "@kagura/cli": "workspace:*",
-    "better-sqlite3": "^12.8.0"
+    "better-sqlite3": "^12.8.0",
+    "commander": "^13.0.0",
+    "open": "^10.1.0",
+    "picocolors": "^1.1.0"
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "0.82.0",
