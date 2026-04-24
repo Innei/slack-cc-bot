@@ -2,6 +2,7 @@ import { Command } from 'commander';
 
 import { buildConfigCommand } from './commands/config.js';
 import { buildDoctorCommand } from './commands/doctor.js';
+import { buildManifestCommand } from './commands/manifest.js';
 import { formatVersion } from './version.js';
 
 export function buildProgram(): Command {
@@ -14,6 +15,7 @@ export function buildProgram(): Command {
 
   program.addCommand(buildConfigCommand());
   program.addCommand(buildDoctorCommand());
+  program.addCommand(buildManifestCommand());
 
   program.action(async () => {
     program.outputHelp();
