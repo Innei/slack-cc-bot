@@ -42,44 +42,110 @@ Running a Claude agent inside Slack requires gluing together thread context, wor
 
 **Operations** — Auto-provisioned manifest (commands + shortcuts), online-presence heartbeat, Home tab, Zod-validated inputs, secret redaction in logs.
 
-## Usage
+## Install
 
 ```bash
 npm install -g @innei/kagura
+# or: pnpm add -g @innei/kagura
+```
+
+Requires Node.js ≥ 22. The package ships two bins: `kagura` (the CLI router + wizard) and `kagura-app` (the bot, bypassing the CLI).
+
+## First run
+
+```bash
 kagura
 ```
 
-On first run, `kagura` notices there is no configuration and launches an interactive wizard:
+`kagura` detects that no configuration exists and launches an interactive wizard:
 
-1. Pick an AI provider (Claude Code or Codex CLI).
-2. Create a Slack app — either via Slack's prefill URL or, if you've pasted a config token, fully automatically via the `apps.manifest.create` API.
-3. Install the app and paste back the Bot Token, App-Level Token, and Signing Secret. The CLI validates each one against `auth.test` before writing.
-4. Point kagura at your repositories (`REPO_ROOT_DIR`).
+1. **Select an AI provider** — `claude-code` (Anthropic Claude via [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-typescript)) or `codex-cli` (OpenAI Codex via the `codex` CLI).
+2. **Set up your Slack app**
+   - **Create a new one** — kagura opens `api.slack.com/apps?new_app=1&manifest_json=…` with the manifest already filled in; click Create → Install. If you have a Slack config token set, it can also call `apps.manifest.create` directly.
+   - **Reuse an existing one** — paste the App ID and credentials.
+   - **Skip for now** — a `.env` skeleton with commented placeholders is written so you can fill it in later.
+3. **Paste tokens** — Bot Token (`xoxb-`), App-Level Token (`xapp-`), and Signing Secret. Each token is live-validated against Slack's `auth.test` before being written.
+4. **Point at your repos** — `REPO_ROOT_DIR`, e.g. `~/git`.
+5. **Start now** — the wizard offers to launch the bot inline once everything is in place.
 
-Everything lands under `~/.config/kagura/` (override with `$KAGURA_HOME`):
+Re-run `kagura init` at any time to reconfigure.
+
+## Configuration layout
+
+Everything lands under `~/.config/kagura/` by default. Override with `$KAGURA_HOME` (useful for Docker or multi-tenant installs). When invoked inside a kagura repo checkout, cwd wins so dev mode keeps working.
 
 ```
 ~/.config/kagura/
-├── .env             secrets
-├── config.json      tunables
-├── data/sessions.db
-└── logs/
+├── .env             # secrets: Slack tokens, API keys
+├── config.json      # non-secret tunables: provider, model, paths, log level
+├── data/
+│   ├── sessions.db                 # Drizzle-managed SQLite
+│   └── slack-config-tokens.json    # rotating Slack config tokens
+└── logs/                           # daily logs (when LOG_TO_FILE=true)
 ```
 
-### Subcommands
+**Precedence** when a key lives in more than one place: `environment > config.json > built-in default`. Put secrets in `.env` and everything else in `config.json`. See [docs/configuration.md](docs/configuration.md) for the full key reference.
 
-| Command                  | What it does                                                 |
-| ------------------------ | ------------------------------------------------------------ |
-| `kagura`                 | Run the bot (launches init wizard if config is incomplete)   |
-| `kagura init`            | Run the init wizard unconditionally                          |
-| `kagura doctor`          | Diagnose configuration and connectivity (`--json`, `--deep`) |
-| `kagura manifest print`  | Print the Kagura-desired Slack manifest                      |
-| `kagura manifest export` | Export your Slack app's current manifest                     |
-| `kagura manifest sync`   | Push the desired manifest into your app                      |
-| `kagura config path`     | Print `~/.config/kagura/`                                    |
-| `kagura --version`       | Print version, commit hash, commit date                      |
-| `kagura --help`          | Show help (works on subcommands too)                         |
-| `kagura-app`             | Run the bot directly, skipping config detection              |
+Example `config.json`:
+
+```json
+{
+  "codex": {
+    "model": "gpt-5.5",
+    "reasoningEffort": "medium",
+    "sandbox": "danger-full-access"
+  },
+  "defaultProviderId": "codex-cli",
+  "logLevel": "info",
+  "repoRootDir": "~/git"
+}
+```
+
+## Subcommands
+
+| Command                          | What it does                                                        |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `kagura`                         | Run the bot; launch init wizard if config is incomplete             |
+| `kagura init`                    | Run the onboarding wizard unconditionally                           |
+| `kagura doctor`                  | Diagnose config + connectivity; exit 0 / 1 / 2 by worst severity    |
+| `kagura doctor --json`           | Machine-readable report (for CI / scripts)                          |
+| `kagura manifest print`          | Print the kagura-desired Slack manifest (no API call)               |
+| `kagura manifest export`         | Fetch the live manifest of your Slack app via config token          |
+| `kagura manifest sync`           | Push the kagura-desired manifest into your Slack app                |
+| `kagura manifest sync --dry-run` | Show what would change without writing                              |
+| `kagura config path`             | Print `~/.config/kagura/` (useful for `$(kagura config path)/.env`) |
+| `kagura config path --json`      | Emit `{ configDir, envFile, configJsonFile, dbPath, logDir, … }`    |
+| `kagura --version`               | Print version + commit hash + commit date                           |
+| `kagura --help`                  | Show help (works on every subcommand)                               |
+| `kagura-app`                     | Run the bot directly, skipping config detection (systemd/Docker)    |
+
+### Common recipes
+
+```bash
+# Diagnose why the bot won't start
+kagura doctor
+
+# Edit secrets or tunables by hand
+$EDITOR "$(kagura config path)/.env"
+$EDITOR "$(kagura config path)/config.json"
+
+# Generate a manifest.json you can upload to Slack manually
+kagura manifest print > manifest.json
+
+# After changing desired scopes / commands, push to Slack
+kagura manifest sync --dry-run
+kagura manifest sync
+```
+
+### Prerequisites
+
+- A Slack workspace where you can create apps.
+- **Socket Mode** enabled on the app (the manifest template does this automatically).
+- The AI CLI you picked logged in and ready:
+  - Claude: run `claude login` first, or set `ANTHROPIC_API_KEY`.
+  - Codex: run `codex login` first, or set `OPENAI_API_KEY`.
+
+If something is off, `kagura doctor` will tell you which check failed.
 
 ## Getting started (development)
 
