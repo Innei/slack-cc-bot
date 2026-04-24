@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 
+import { buildConfigCommand } from './commands/config.js';
 import { formatVersion } from './version.js';
 
 export function buildProgram(): Command {
@@ -9,6 +10,8 @@ export function buildProgram(): Command {
     .version(formatVersion(), '-V, --version', 'output the version')
     .helpOption('-h, --help', 'display help')
     .showHelpAfterError('(use `kagura --help` for help)');
+
+  program.addCommand(buildConfigCommand());
 
   program.action(async () => {
     program.outputHelp();
