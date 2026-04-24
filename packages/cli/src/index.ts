@@ -1,7 +1,9 @@
-import { buildProgram } from './router.js';
+import { buildProgram, type RunHooks } from './router.js';
 
-export async function runCli(argv: string[]): Promise<number> {
-  const program = buildProgram();
+export type { RunHooks } from './router.js';
+
+export async function runCli(argv: string[], hooks: RunHooks = {}): Promise<number> {
+  const program = buildProgram(hooks);
   program.exitOverride();
   try {
     await program.parseAsync(argv);
