@@ -142,8 +142,10 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       }
     }
 
+    const botUserId = await getBotUserId(client);
+    const mentionsCurrentBot = mentionsUser(message.text, botUserId);
     const session = deps.sessionStore.get(threadTs);
-    if (!session) {
+    if (!session && !mentionsCurrentBot) {
       runtimeWarn(
         deps.logger,
         'Ignoring thread reply %s in thread %s because no persisted session was found',
@@ -156,7 +158,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
     const channelId =
       typeof message.channel === 'string' && message.channel.trim()
         ? message.channel
-        : session.channelId;
+        : session?.channelId;
     const teamId = typeof message.team === 'string' ? message.team : undefined;
     if (!channelId) {
       runtimeError(deps.logger, 'Skipping thread reply without channel id for thread %s', threadTs);
@@ -167,7 +169,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
         deps.logger,
         'Thread reply missing channel id for thread %s; falling back to session channel %s',
         threadTs,
-        session.channelId,
+        session?.channelId,
       );
     }
     if (!teamId) {
@@ -178,7 +180,6 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       );
     }
 
-    const botUserId = await getBotUserId(client);
     const senderId = message.user?.trim() || message.bot_id?.trim();
     if (!senderId) {
       runtimeWarn(
@@ -237,10 +238,14 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
         logLabel: 'thread reply',
         addAcknowledgementReaction: false,
         currentBotUserId: botUserId,
-        rootMessageTs: session.rootMessageTs,
+        rootMessageTs: session?.rootMessageTs ?? threadTs,
       },
     );
   };
+}
+
+function mentionsUser(messageText: string, userId: string | undefined): boolean {
+  return Boolean(userId && messageText.includes(`<@${userId}>`));
 }
 
 export function createAssistantThreadStartedHandler(

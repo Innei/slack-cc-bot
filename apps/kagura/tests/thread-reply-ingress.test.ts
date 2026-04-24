@@ -136,6 +136,62 @@ describe('thread reply ingress', () => {
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
   });
 
+  it('processes bot-authored thread replies that mention this bot before a local session exists', async () => {
+    const threadTs = '1712345678.000106';
+    const messageTs = '1712345678.000107';
+    const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        initialSessions: [],
+      });
+    client.conversations.replies.mockResolvedValue({
+      messages: [
+        {
+          text: '<@U_OTHER_BOT> please join this thread',
+          ts: threadTs,
+          user: 'U_HUMAN',
+        },
+        {
+          bot_id: 'B_OTHER',
+          text: '<@U_BOT> please inspect the history',
+          thread_ts: threadTs,
+          ts: messageTs,
+          user: 'U_OTHER_BOT',
+        },
+      ],
+    });
+
+    await handler({
+      client,
+      event: {
+        bot_id: 'B_OTHER',
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> please inspect the history',
+        thread_ts: threadTs,
+        ts: messageTs,
+        type: 'message',
+        user: 'U_OTHER_BOT',
+      },
+    });
+
+    expect(renderer.showThinkingIndicator).toHaveBeenCalledOnce();
+    expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    expect(sessionStore.get(threadTs)).toMatchObject({
+      channelId: 'C123',
+      rootMessageTs: threadTs,
+      threadTs,
+    });
+    const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+      .calls[0]!;
+    expect(request).toMatchObject({
+      channelId: 'C123',
+      mentionText: '<@U_BOT> please inspect the history',
+      threadTs,
+      userId: 'U_OTHER_BOT',
+    });
+  });
+
   it('allows app mentions even when Slack omits the team id', async () => {
     const threadTs = '1712345678.000107';
     const { appMentionHandler, claudeExecutor, client } = createDualIngressTestHarness(threadTs);
@@ -315,28 +371,37 @@ describe('thread reply ingress', () => {
   });
 });
 
-function createThreadReplyTestHarness(threadTs: string): {
+function createThreadReplyTestHarness(
+  threadTs: string,
+  options: { initialSessions?: SessionRecord[] } = {},
+): {
   claudeExecutor: AgentExecutor;
   client: SlackWebClientLike & {
     auth: {
       test: ReturnType<typeof vi.fn>;
     };
+    conversations: {
+      replies: ReturnType<typeof vi.fn>;
+    };
   };
   handler: ReturnType<typeof createThreadReplyHandler>;
   logger: AppLogger;
   renderer: SlackRenderer;
+  sessionStore: SessionStore;
   threadContextLoader: SlackThreadContextLoader;
 } {
   const logger = createTestLogger();
-  const sessionStore = createMemorySessionStore([
-    {
-      channelId: 'C123',
-      createdAt: new Date().toISOString(),
-      rootMessageTs: threadTs,
-      threadTs,
-      updatedAt: new Date().toISOString(),
-    },
-  ]);
+  const sessionStore = createMemorySessionStore(
+    options.initialSessions ?? [
+      {
+        channelId: 'C123',
+        createdAt: new Date().toISOString(),
+        rootMessageTs: threadTs,
+        threadTs,
+        updatedAt: new Date().toISOString(),
+      },
+    ],
+  );
   const claudeExecutor = {
     providerId: 'claude-code',
     execute: vi.fn().mockResolvedValue(undefined),
@@ -383,6 +448,7 @@ function createThreadReplyTestHarness(threadTs: string): {
     handler,
     logger,
     renderer,
+    sessionStore,
     threadContextLoader,
   };
 }
@@ -396,6 +462,9 @@ function createDualIngressTestHarness(
   client: SlackWebClientLike & {
     auth: {
       test: ReturnType<typeof vi.fn>;
+    };
+    conversations: {
+      replies: ReturnType<typeof vi.fn>;
     };
   };
   threadReplyHandler: ReturnType<typeof createThreadReplyHandler>;
@@ -460,6 +529,9 @@ function createDualIngressTestHarness(
 function createSlackClientFixture(): SlackWebClientLike & {
   auth: {
     test: ReturnType<typeof vi.fn>;
+  };
+  conversations: {
+    replies: ReturnType<typeof vi.fn>;
   };
 } {
   return {
