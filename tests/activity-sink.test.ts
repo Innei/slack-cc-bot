@@ -148,7 +148,32 @@ describe('createActivitySink', () => {
       expect.anything(),
       'C123',
       'ts1',
-      'An error occurred while processing your request.',
+      'Claude execution failed: boom',
+    );
+  });
+
+  it('redacts token-like values from lifecycle failed replies', async () => {
+    const renderer = createRendererStub();
+    const sink = createActivitySink({
+      channel: 'C123',
+      client: createMockClient(),
+      logger: createTestLogger(),
+      renderer,
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+    });
+
+    await sink.onEvent({
+      type: 'lifecycle',
+      phase: 'failed',
+      error: 'request failed with Bearer abc.def.ghi and sk-ant-testtoken',
+    });
+
+    expect(renderer.postThreadReply).toHaveBeenCalledWith(
+      expect.anything(),
+      'C123',
+      'ts1',
+      'Claude execution failed: request failed with Bearer [REDACTED] and [REDACTED]',
     );
   });
 
@@ -517,7 +542,7 @@ describe('createActivitySink', () => {
       expect.anything(),
       'C123',
       'ts1',
-      'An error occurred while processing your request.',
+      expect.stringContaining('Claude execution failed'),
     );
   });
 

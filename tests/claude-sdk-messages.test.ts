@@ -1,6 +1,10 @@
 import path from 'node:path';
 
-import type { SDKFilesPersistedEvent, SDKSystemMessage } from '@anthropic-ai/claude-agent-sdk';
+import type {
+  SDKAPIRetryMessage,
+  SDKFilesPersistedEvent,
+  SDKSystemMessage,
+} from '@anthropic-ai/claude-agent-sdk';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleClaudeSdkMessage } from '~/agent/providers/claude-code/messages.js';
@@ -173,5 +177,67 @@ describe('handleClaudeSdkMessage — files_persisted', () => {
     expect(imgEvents[0]!.files[0]!.path).toBe(path.resolve(fallback, 'img.JPEG'));
 
     spy.mockRestore();
+  });
+});
+
+describe('handleClaudeSdkMessage — api_retry', () => {
+  it('publishes retry status with attempt, HTTP status, and error kind', async () => {
+    const handlers: MessageHandlers = {
+      collectAssistantText: vi.fn(),
+      publishUiState: vi.fn().mockResolvedValue(undefined),
+      runtimeUi: createRuntimeUiStateTracker(),
+      setSessionId: vi.fn(),
+      getSessionCwd: () => undefined,
+      setSessionCwd: vi.fn(),
+    };
+    const message: SDKAPIRetryMessage = {
+      type: 'system',
+      subtype: 'api_retry',
+      attempt: 2,
+      max_retries: 5,
+      retry_delay_ms: 1_000,
+      error_status: 529,
+      error: 'server_error',
+      uuid: '00000000-0000-4000-8000-000000000003',
+      session_id: 'sess-test',
+    };
+
+    await handleClaudeSdkMessage(createTestLogger(), message, { onEvent: vi.fn() }, handlers);
+
+    expect(handlers.runtimeUi.systemStatuses.retry).toBe(
+      'Retrying Claude API request (attempt 2/5, HTTP 529, server_error)...',
+    );
+    expect(handlers.runtimeUi.loadingMessages).toContain(
+      'Retrying Claude API request (attempt 2/5, HTTP 529, server_error)...',
+    );
+    expect(handlers.publishUiState).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels retry events without an HTTP response as network failures', async () => {
+    const handlers: MessageHandlers = {
+      collectAssistantText: vi.fn(),
+      publishUiState: vi.fn().mockResolvedValue(undefined),
+      runtimeUi: createRuntimeUiStateTracker(),
+      setSessionId: vi.fn(),
+      getSessionCwd: () => undefined,
+      setSessionCwd: vi.fn(),
+    };
+    const message: SDKAPIRetryMessage = {
+      type: 'system',
+      subtype: 'api_retry',
+      attempt: 1,
+      max_retries: 3,
+      retry_delay_ms: 500,
+      error_status: null,
+      error: 'unknown',
+      uuid: '00000000-0000-4000-8000-000000000004',
+      session_id: 'sess-test',
+    };
+
+    await handleClaudeSdkMessage(createTestLogger(), message, { onEvent: vi.fn() }, handlers);
+
+    expect(handlers.runtimeUi.systemStatuses.retry).toBe(
+      'Retrying Claude API request (attempt 1/3, network/no HTTP response, unknown)...',
+    );
   });
 });

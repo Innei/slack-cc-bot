@@ -13,6 +13,7 @@ import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
+import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
@@ -328,7 +329,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
           client,
           channel,
           threadTs,
-          'An error occurred while processing your request.',
+          formatClaudeExecutionFailureReply(event.error),
         ),
       );
     }

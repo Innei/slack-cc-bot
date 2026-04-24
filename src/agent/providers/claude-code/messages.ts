@@ -214,6 +214,7 @@ async function handleApiRetryMessage(
   message: SDKAPIRetryMessage,
   handlers: MessageHandlers,
 ): Promise<void> {
+  const retryStatus = formatApiRetryStatus(message);
   logger.warn(
     'Claude API retry %d/%d after %dms (http=%s error=%s)',
     message.attempt,
@@ -222,9 +223,19 @@ async function handleApiRetryMessage(
     message.error_status === null ? 'none' : String(message.error_status),
     message.error,
   );
-  setSystemStatus(handlers.runtimeUi, 'retry', 'Retrying Claude API request...');
-  rememberLoadingMessage(handlers.runtimeUi, 'Retrying Claude API request...');
+  setSystemStatus(handlers.runtimeUi, 'retry', retryStatus);
+  rememberLoadingMessage(handlers.runtimeUi, retryStatus);
   await handlers.publishUiState();
+}
+
+function formatApiRetryStatus(message: SDKAPIRetryMessage): string {
+  const details = [
+    `attempt ${message.attempt}/${message.max_retries}`,
+    message.error_status === null ? 'network/no HTTP response' : `HTTP ${message.error_status}`,
+    message.error,
+  ];
+
+  return `Retrying Claude API request (${details.join(', ')})...`;
 }
 
 async function handleTaskStartedMessage(

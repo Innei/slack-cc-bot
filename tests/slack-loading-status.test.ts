@@ -650,9 +650,7 @@ describe('Slack loading status test', () => {
         {
           elements: [
             {
-              elements: [
-                { text: 'An error occurred while processing your request.', type: 'text' },
-              ],
+              elements: [{ text: 'Claude execution failed: boom', type: 'text' }],
               type: 'rich_text_section',
             },
           ],
@@ -660,7 +658,7 @@ describe('Slack loading status test', () => {
         },
       ],
       channel: 'C123',
-      text: 'An error occurred while processing your request.',
+      text: 'Claude execution failed: boom',
       thread_ts: threadTs,
     });
     expect(deleteCalls).toEqual([]);

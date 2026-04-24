@@ -381,6 +381,10 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
     return false;
   }
 
+  if (normalized.startsWith('Retrying Claude API request ')) {
+    return false;
+  }
+
   if (isStreamDetailLoadingMessage(normalized)) {
     return false;
   }
@@ -390,7 +394,9 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
 
 function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: LiveE2EResult): void {
   if (record.kind === 'status') {
-    if (THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])) {
+    if (
+      THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])
+    ) {
       result.matched.fallbackStatusObserved = true;
     }
 

@@ -4,6 +4,7 @@ import type { AgentExecutor } from '~/agent/types.js';
 import { redact } from '~/logger/redact.js';
 import { runtimeError, runtimeInfo, runtimeWarn } from '~/logger/runtime.js';
 import type { SessionRecord } from '~/session/types.js';
+import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 
 import type { ThreadExecutionStopReason } from '../execution/thread-execution-registry.js';
 import type { SlackWebClientLike } from '../types.js';
@@ -397,7 +398,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       client,
       message.channel,
       threadTs,
-      'An error occurred while processing your request.',
+      formatClaudeExecutionFailureReply(errorMessage),
     );
   } finally {
     runtimeInfo(
