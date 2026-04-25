@@ -342,6 +342,8 @@ export class CodexCliExecutor implements AgentExecutor {
         'exec',
         'resume',
         '--json',
+        '--sandbox',
+        env.CODEX_CLI_SANDBOX,
         '-c',
         'approval_policy="never"',
         '--skip-git-repo-check',

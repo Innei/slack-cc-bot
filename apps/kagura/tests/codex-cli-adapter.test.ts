@@ -245,7 +245,15 @@ describe('CodexCliExecutor', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       'codex',
-      expect.arrayContaining(['exec', 'resume', 'codex-thread-1', '-']),
+      expect.arrayContaining([
+        'exec',
+        'resume',
+        '--json',
+        '--sandbox',
+        'danger-full-access',
+        'codex-thread-1',
+        '-',
+      ]),
       expect.any(Object),
     );
   });
