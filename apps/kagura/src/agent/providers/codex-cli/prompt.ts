@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import {
@@ -14,8 +15,15 @@ import {
 } from '~/agent/prompt/index.js';
 import type { AgentExecutionRequest } from '~/agent/types.js';
 
-export const CODEX_GENERATED_ARTIFACTS_DIR = '.kagura/generated';
-export const CODEX_RUNTIME_DIR = '.kagura/runtime';
+const CODEX_GENERATED_ARTIFACTS_DIRNAME = 'generated';
+const CODEX_RUNTIME_DIRNAME = 'runtime';
+const CODEX_RUNTIME_ROOT_DIR = path.join(os.tmpdir(), 'kagura', 'codex-cli');
+
+export interface CodexRuntimePaths {
+  generatedArtifactsDir: string;
+  memoryOpsPath: string;
+  runtimeDir: string;
+}
 
 const CODEX_PROMPT_PROCESSORS = [
   systemRoleProcessor,
@@ -28,13 +36,15 @@ const CODEX_PROMPT_PROCESSORS = [
   imageCollectionProcessor,
 ];
 
-export function buildCodexPrompt(request: AgentExecutionRequest): string {
+export function buildCodexPrompt(
+  request: AgentExecutionRequest,
+  runtimePaths = getCodexRuntimePaths(request),
+): string {
   const prompt = assemblePrompt(request, CODEX_PROMPT_PROCESSORS);
-  const memoryOpsPath = getCodexMemoryOpsRelativePath(request);
   const sections: Array<string | undefined> = [
     `<system_instructions>\n${prompt.systemPrompt}\n</system_instructions>`,
-    `<codex_runtime_tools>\nThis Codex CLI adapter exposes host-side tools through files in the current working directory.\n\nMemory tools:\n- To call save_memory, append one JSON object per line to ${memoryOpsPath}.\n- JSON shape: {"tool":"save_memory","category":"preference|context|decision|observation|task_completed","scope":"global|workspace","content":"memory text","metadata":{...},"expiresAt":"optional ISO datetime"}.\n- If scope is omitted, the host uses workspace scope when a workspace is set, otherwise global scope.\n- When the user explicitly asks you to call save_memory, you MUST write the JSONL operation before your final answer.\n- To recall memory, use the <conversation_memory> section already loaded by the host. If the user says "use recall_memory", answer from that loaded memory context.\n</codex_runtime_tools>`,
-    `<codex_slack_uploads>\nWhen you need to send a generated image or file back to Slack, write the final artifact under ${CODEX_GENERATED_ARTIFACTS_DIR}/ relative to the current working directory. The host adapter uploads new or modified files from that directory to the Slack thread after your run. Use normal file extensions such as .png, .jpg, .webp, .gif, .txt, .md, .json, or .csv so the host can classify them.\n</codex_slack_uploads>`,
+    `<codex_runtime_tools>\nThis Codex CLI adapter exposes host-side tools through files managed outside the current workspace.\n\nMemory tools:\n- To call save_memory, append one JSON object per line to ${runtimePaths.memoryOpsPath}.\n- JSON shape: {"tool":"save_memory","category":"preference|context|decision|observation|task_completed","scope":"global|workspace","content":"memory text","metadata":{...},"expiresAt":"optional ISO datetime"}.\n- If scope is omitted, the host uses workspace scope when a workspace is set, otherwise global scope.\n- When the user explicitly asks you to call save_memory, you MUST write the JSONL operation before your final answer.\n- To recall memory, use the <conversation_memory> section already loaded by the host. If the user says "use recall_memory", answer from that loaded memory context.\n</codex_runtime_tools>`,
+    `<codex_slack_uploads>\nWhen you need to send a generated image or file back to Slack, write the final artifact under ${runtimePaths.generatedArtifactsDir}/. The host adapter uploads new or modified files from that directory to the Slack thread after your run. Use normal file extensions such as .png, .jpg, .webp, .gif, .txt, .md, .json, or .csv so the host can classify them.\n</codex_slack_uploads>`,
     buildCodexSkillInstructions(request),
     prompt.userText,
   ];
@@ -52,9 +62,25 @@ export function buildCodexPrompt(request: AgentExecutionRequest): string {
     .join('\n\n');
 }
 
-export function getCodexMemoryOpsRelativePath(request: AgentExecutionRequest): string {
+export function getCodexRuntimePaths(request: AgentExecutionRequest): CodexRuntimePaths {
+  const rootSuffix = sanitizeRuntimePathPart(
+    [request.channelId, request.threadTs, request.executionId ?? 'memory'].join('-'),
+  );
+  const runtimeRoot = path.join(CODEX_RUNTIME_ROOT_DIR, rootSuffix);
+  const runtimeDir = path.join(runtimeRoot, CODEX_RUNTIME_DIRNAME);
+  const generatedArtifactsDir = path.join(runtimeRoot, CODEX_GENERATED_ARTIFACTS_DIRNAME);
+  const memoryOpsPath = path.join(runtimeDir, getCodexMemoryOpsFileName(request));
+
+  return {
+    generatedArtifactsDir,
+    memoryOpsPath,
+    runtimeDir,
+  };
+}
+
+function getCodexMemoryOpsFileName(request: AgentExecutionRequest): string {
   const suffix = sanitizeRuntimePathPart(request.executionId ?? 'memory');
-  return `${CODEX_RUNTIME_DIR}/${suffix}-memory-ops.jsonl`;
+  return `${suffix}-memory-ops.jsonl`;
 }
 
 function buildCodexSkillInstructions(request: AgentExecutionRequest): string | undefined {

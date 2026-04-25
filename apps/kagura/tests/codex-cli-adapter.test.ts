@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
@@ -7,11 +7,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
-import {
-  buildCodexPrompt,
-  CODEX_GENERATED_ARTIFACTS_DIR,
-  getCodexMemoryOpsRelativePath,
-} from '~/agent/providers/codex-cli/prompt.js';
+import { buildCodexPrompt, getCodexRuntimePaths } from '~/agent/providers/codex-cli/prompt.js';
 import type { AgentExecutionEvent, AgentExecutionRequest } from '~/agent/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { MemoryRecord, MemoryStore, SaveMemoryInput } from '~/memory/types.js';
@@ -317,12 +313,14 @@ describe('CodexCliExecutor', () => {
 
   it('emits generated-images for new Codex artifact files', async () => {
     const workspacePath = mkdtempSync(path.join(tmpdir(), 'codex-artifacts-'));
-    const imagePath = path.join(workspacePath, CODEX_GENERATED_ARTIFACTS_DIR, 'blue.png');
+    const request = createRequest({ workspacePath });
+    const runtimePaths = getCodexRuntimePaths(request);
+    const imagePath = path.join(runtimePaths.generatedArtifactsDir, 'blue.png');
 
     spawnMock.mockImplementation(
       () =>
         new FakeCodexProcess((prompt, child) => {
-          expect(prompt).toContain(CODEX_GENERATED_ARTIFACTS_DIR);
+          expect(prompt).toContain(runtimePaths.generatedArtifactsDir);
           queueMicrotask(() => {
             writeFileSync(imagePath, Buffer.from('89504e470d0a1a0a', 'hex'));
             writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
@@ -339,10 +337,7 @@ describe('CodexCliExecutor', () => {
     );
 
     const events: AgentExecutionEvent[] = [];
-    await new CodexCliExecutor(createLogger()).execute(
-      createRequest({ workspacePath }),
-      createSink(events),
-    );
+    await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
 
     expect(events).toContainEqual({
       type: 'generated-images',
@@ -354,6 +349,7 @@ describe('CodexCliExecutor', () => {
         },
       ],
     });
+    expect(existsSync(path.join(workspacePath, '.kagura'))).toBe(false);
     expect(events.at(-1)).toEqual({
       type: 'lifecycle',
       phase: 'completed',
@@ -368,14 +364,14 @@ describe('CodexCliExecutor', () => {
       workspacePath,
       workspaceRepoId: 'repo-a',
     });
-    const memoryOpsPath = path.join(workspacePath, getCodexMemoryOpsRelativePath(request));
+    const { memoryOpsPath } = getCodexRuntimePaths(request);
     const saved: MemoryRecord[] = [];
     const memoryStore = createMemoryStore(saved);
 
     spawnMock.mockImplementation(
       () =>
         new FakeCodexProcess((prompt, child) => {
-          expect(prompt).toContain(getCodexMemoryOpsRelativePath(request));
+          expect(prompt).toContain(memoryOpsPath);
           queueMicrotask(() => {
             writeFileSync(
               memoryOpsPath,
@@ -401,6 +397,7 @@ describe('CodexCliExecutor', () => {
 
     await new CodexCliExecutor(createLogger(), memoryStore).execute(request, createSink([]));
 
+    expect(existsSync(path.join(workspacePath, '.kagura'))).toBe(false);
     expect(memoryStore.save).toHaveBeenCalledWith({
       category: 'decision',
       content: 'remember this decision',
@@ -408,6 +405,68 @@ describe('CodexCliExecutor', () => {
       threadTs: request.threadTs,
     });
     expect(saved).toHaveLength(1);
+  });
+
+  it('renders Codex memory file writes as a concise memory activity', async () => {
+    const request = createRequest({ executionId: 'exec-memory' });
+    const { memoryOpsPath, runtimeDir } = getCodexRuntimePaths(request);
+    const command = `/bin/zsh -lc "mkdir -p ${runtimeDir} && printf '%s\\n' '{\\"tool\\":\\"save_memory\\",\\"category\\":\\"decision\\",\\"content\\":\\"remember\\"}' >> ${memoryOpsPath}"`;
+
+    spawnMock.mockImplementation(
+      () =>
+        new FakeCodexProcess((_prompt, child) => {
+          queueMicrotask(() => {
+            writeJson(child, { type: 'thread.started', thread_id: 'codex-thread-1' });
+            writeJson(child, { type: 'turn.started' });
+            writeJson(child, {
+              type: 'item.started',
+              item: {
+                id: 'cmd-memory',
+                type: 'command_execution',
+                command,
+                status: 'in_progress',
+              },
+            });
+            writeJson(child, {
+              type: 'item.completed',
+              item: {
+                id: 'cmd-memory',
+                type: 'command_execution',
+                command,
+                exit_code: 0,
+                status: 'completed',
+              },
+            });
+            writeJson(child, { type: 'turn.completed', usage: {} });
+            child.stdout.end();
+            child.stderr.end();
+            child.emit('exit', 0, null);
+          });
+        }),
+    );
+
+    const events: AgentExecutionEvent[] = [];
+    await new CodexCliExecutor(createLogger()).execute(request, createSink(events));
+
+    expect(events).toContainEqual({
+      type: 'activity-state',
+      state: {
+        status: 'Saving memory...',
+        threadTs: '1712345678.000100',
+      },
+    });
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        type: 'task-update',
+        taskId: 'cmd-memory',
+        title: 'Saving memory...',
+      }),
+    );
+    expect(events).not.toContainEqual(
+      expect.objectContaining({
+        title: command,
+      }),
+    );
   });
 
   it('injects requested workspace skill markdown into the Codex prompt', () => {

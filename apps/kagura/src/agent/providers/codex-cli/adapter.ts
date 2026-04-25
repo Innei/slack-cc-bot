@@ -16,17 +16,13 @@ import type { AppLogger } from '~/logger/index.js';
 import { redact } from '~/logger/redact.js';
 import { MEMORY_CATEGORIES, type MemoryCategory, type MemoryStore } from '~/memory/types.js';
 
-import {
-  buildCodexPrompt,
-  CODEX_GENERATED_ARTIFACTS_DIR,
-  CODEX_RUNTIME_DIR,
-  getCodexMemoryOpsRelativePath,
-} from './prompt.js';
+import { buildCodexPrompt, getCodexRuntimePaths } from './prompt.js';
 
 const ABORT_KILL_TIMEOUT_MS = 1_000;
 const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
 const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
 const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
+const CODEX_MEMORY_OPS_COMMAND_PATTERN = /[^\s"'\\]*-memory-ops\.jsonl(?:$|[\s"'])/;
 
 interface GeneratedArtifactSnapshotEntry {
   mtimeMs: number;
@@ -121,12 +117,11 @@ export class CodexCliExecutor implements AgentExecutor {
   ): Promise<void> {
     const executionId = request.executionId ?? 'unknown';
     const executionStartedAt = Date.now();
-    const prompt = buildCodexPrompt(request);
     const args = this.buildArgs(request);
     const cwd = request.workspacePath ?? process.cwd();
-    const generatedArtifactsDir = path.resolve(cwd, CODEX_GENERATED_ARTIFACTS_DIR);
-    const runtimeDir = path.resolve(cwd, CODEX_RUNTIME_DIR);
-    const memoryOpsPath = path.resolve(cwd, getCodexMemoryOpsRelativePath(request));
+    const runtimePaths = getCodexRuntimePaths(request);
+    const prompt = buildCodexPrompt(request, runtimePaths);
+    const { generatedArtifactsDir, memoryOpsPath, runtimeDir } = runtimePaths;
     let child: ChildProcessWithoutNullStreams | undefined;
     let resumeHandle = request.resumeHandle;
     let started = false;
@@ -519,7 +514,7 @@ export class CodexCliExecutor implements AgentExecutor {
 
     const command = typeof item.command === 'string' ? item.command : undefined;
     const taskId = typeof item.id === 'string' ? item.id : (command ?? 'codex-command');
-    const title = command ?? 'Running command';
+    const title = command ? describeCodexCommand(command) : 'Running command';
     const exitCode = typeof item.exit_code === 'number' ? item.exit_code : undefined;
     const itemStatus = typeof item.status === 'string' ? item.status : undefined;
     const aggregatedOutput =
@@ -577,6 +572,14 @@ export class CodexCliExecutor implements AgentExecutor {
       totalCostUSD: 0,
     };
   }
+}
+
+function describeCodexCommand(command: string): string {
+  if (CODEX_MEMORY_OPS_COMMAND_PATTERN.test(command)) {
+    return 'Saving memory...';
+  }
+
+  return command;
 }
 
 async function snapshotGeneratedArtifacts(dir: string): Promise<GeneratedArtifactSnapshot> {
