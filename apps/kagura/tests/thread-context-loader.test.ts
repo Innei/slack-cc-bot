@@ -168,7 +168,8 @@ describe('SlackThreadContextLoader (images)', () => {
       },
     ]);
     expect(ctx.fileLoadFailures).toEqual([]);
-    expect(ctx.renderedPrompt).toContain('Attached files: notes.txt');
+    expect(ctx.renderedPrompt).toContain('<attached_files>');
+    expect(ctx.renderedPrompt).toContain('- notes.txt');
   });
 
   it('records per-file failures while still loading the rest of the thread', async () => {

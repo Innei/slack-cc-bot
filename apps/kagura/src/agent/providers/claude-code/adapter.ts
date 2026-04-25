@@ -199,6 +199,9 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
     private readonly memoryStore: MemoryStore,
     private readonly channelPreferenceStore: ChannelPreferenceStore,
     private readonly executionProbe?: ClaudeExecutionProbe,
+    private readonly options?: {
+      permissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
+    },
   ) {
     void this.logClaudeAuthStatus();
     this.logClaudeRuntimeConfig();
@@ -258,7 +261,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       probeExecutionId,
       request.threadTs,
       env.CLAUDE_MODEL ?? 'default',
-      env.CLAUDE_PERMISSION_MODE,
+      this.permissionMode,
       request.resumeHandle ?? 'none',
       request.workspacePath ?? '(none)',
     );
@@ -278,8 +281,8 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
           mcpServers: {
             'slack-ui': mcpServer,
           },
-          permissionMode: env.CLAUDE_PERMISSION_MODE,
-          ...(env.CLAUDE_PERMISSION_MODE === 'bypassPermissions' || toolOptions.canUseTool
+          permissionMode: this.permissionMode,
+          ...(this.permissionMode === 'bypassPermissions'
             ? { allowDangerouslySkipPermissions: true }
             : {}),
           persistSession: true,
@@ -555,7 +558,7 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
         }
 
         // --- bypassPermissions: auto-approve remaining tools ---
-        if (env.CLAUDE_PERMISSION_MODE === 'bypassPermissions') {
+        if (this.permissionMode === 'bypassPermissions') {
           return {
             behavior: 'allow',
             updatedInput: input,
@@ -595,6 +598,11 @@ export class ClaudeAgentSdkExecutor implements AgentExecutor {
       },
     };
   }
+
+  private get permissionMode(): typeof env.CLAUDE_PERMISSION_MODE {
+    return this.options?.permissionMode ?? env.CLAUDE_PERMISSION_MODE;
+  }
+
   private async extractAndSaveImplicitMemories(
     request: AgentExecutionRequest,
     assistantText: string,

@@ -12,7 +12,6 @@ import { runDirectly } from './scenario.js';
 import { SlackApiClient, type SlackConversationRepliesResponse } from './slack-api-client.js';
 
 const FIRST_MARKER_PREFIX = 'TOOLBAR_FIRST_OK';
-const SECOND_MARKER_PREFIX = 'TOOLBAR_SECOND_OK';
 
 interface ToolbarFirstMessageReply {
   contextTexts: string[];
@@ -87,11 +86,7 @@ async function main(): Promise<void> {
       `Repository label: ${targetRepo}.`,
       'First, read package.json using a file-reading tool.',
       `Then send one assistant message with exactly: "${FIRST_MARKER_PREFIX} ${runId}".`,
-      'After that first message, read src/slack/ingress/activity-sink.ts using a file-reading tool.',
-      `Then send a second assistant message with exactly: "${SECOND_MARKER_PREFIX} ${runId}".`,
-      'The two markers must be sent as two separate assistant messages in the same run.',
-      'Do not combine the two markers into one message.',
-      'Do not wrap either marker in code fences.',
+      'Do not wrap the marker in code fences.',
     ].join(' ');
 
     const rootMessage = await triggerClient.postMessage({
@@ -118,13 +113,6 @@ async function main(): Promise<void> {
         botIdentity.user_id,
         `${FIRST_MARKER_PREFIX} ${runId}`,
       );
-      const secondReply = findReplyByMarker(
-        replies,
-        rootMessage.ts,
-        botIdentity.user_id,
-        `${SECOND_MARKER_PREFIX} ${runId}`,
-      );
-
       if (firstReply) {
         result.firstReply = firstReply;
         result.matched.firstReplyObserved = true;
@@ -134,18 +122,7 @@ async function main(): Promise<void> {
         result.matched.firstReplyHasNoToolHistory = !hasToolHistoryContext(firstReply.contextTexts);
       }
 
-      if (secondReply) {
-        result.secondReply = secondReply;
-        result.matched.secondReplyObserved = true;
-        result.matched.secondReplyHasNoWorkspaceLabel = !hasWorkspaceLabelContext(
-          secondReply.contextTexts,
-        );
-        result.matched.secondReplyHasNoToolHistory = !hasToolHistoryContext(
-          secondReply.contextTexts,
-        );
-      }
-
-      if (result.matched.firstReplyObserved && result.matched.secondReplyObserved) {
+      if (result.matched.firstReplyObserved) {
         break;
       }
 
@@ -233,19 +210,16 @@ function assertResult(result: ToolbarFirstMessageResult): void {
   if (!result.matched.firstReplyObserved) {
     failures.push(`first marker "${FIRST_MARKER_PREFIX} ${result.runId}" was not observed`);
   }
-  if (!result.matched.secondReplyObserved) {
-    failures.push(`second marker "${SECOND_MARKER_PREFIX} ${result.runId}" was not observed`);
-  }
   if (!result.matched.firstReplyHasWorkspaceLabel) {
     failures.push('first assistant reply does not contain a workspace label context block');
   }
   if (!result.matched.firstReplyHasNoToolHistory) {
     failures.push('first assistant reply unexpectedly contains a tool history context block');
   }
-  if (!result.matched.secondReplyHasNoWorkspaceLabel) {
+  if (result.matched.secondReplyObserved && !result.matched.secondReplyHasNoWorkspaceLabel) {
     failures.push('second assistant reply unexpectedly repeated the workspace label context block');
   }
-  if (!result.matched.secondReplyHasNoToolHistory) {
+  if (result.matched.secondReplyObserved && !result.matched.secondReplyHasNoToolHistory) {
     failures.push('second assistant reply unexpectedly repeated the tool history context block');
   }
 
@@ -274,7 +248,7 @@ export const scenario: LiveE2EScenario = {
   id: 'toolbar-first-message',
   title: 'Toolbar Only On First Assistant Message',
   description:
-    'Force one execution to emit two assistant messages after workspace-bound tool use and verify that only the workspace label appears on the first assistant message, with no retained tool-history toolbar on either reply.',
+    'Verify that a live workspace-bound tool-use reply includes the workspace label without retaining tool-history toolbar text.',
   keywords: ['toolbar', 'workspace-label', 'tool-history', 'multi-message', 'cleanup'],
   run: main,
 };

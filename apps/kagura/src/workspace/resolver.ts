@@ -378,6 +378,21 @@ function finalizeCandidates(
       };
     }
 
+    const topRepoIds = new Set(topCandidates.map((candidate) => candidate.workspace.repo.id));
+    if (topRepoIds.size === 1) {
+      const mostSpecific = [...topCandidates].sort(
+        (left, right) =>
+          right.workspace.workspacePath.length - left.workspace.workspacePath.length ||
+          left.workspace.workspaceLabel.localeCompare(right.workspace.workspaceLabel),
+      )[0];
+      if (mostSpecific) {
+        return {
+          status: 'unique',
+          workspace: mostSpecific.workspace,
+        };
+      }
+    }
+
     return {
       candidates: topCandidates.map((candidate) => candidate.workspace.repo),
       query,

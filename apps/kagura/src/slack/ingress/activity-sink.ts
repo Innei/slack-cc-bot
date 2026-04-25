@@ -1,6 +1,8 @@
 import type {
   AgentActivityState,
   AgentExecutionEvent,
+  AgentPermissionRequest,
+  AgentPermissionResponse,
   AgentUserInputQuestion,
   AgentUserInputRequest,
   AgentUserInputResponse,
@@ -15,6 +17,7 @@ import { runtimeError } from '~/logger/runtime.js';
 import type { SessionStore } from '~/session/types.js';
 import { formatClaudeExecutionFailureReply } from '~/util/error-detail.js';
 
+import type { SlackPermissionBridge } from '../interaction/permission-bridge.js';
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { PostedThreadReply, SlackRenderer } from '../render/slack-renderer.js';
 import {
@@ -29,6 +32,7 @@ export interface ActivitySinkOptions {
   channel: string;
   client: SlackWebClientLike;
   logger: AppLogger;
+  permissionBridge?: SlackPermissionBridge | undefined;
   renderer: SlackRenderer;
   sessionStore: SessionStore;
   threadTs: string;
@@ -40,6 +44,12 @@ export interface ActivitySinkOptions {
 export interface ActivitySink {
   finalize: () => Promise<void>;
   onEvent: (event: AgentExecutionEvent) => Promise<void>;
+  requestPermission?: (
+    request: AgentPermissionRequest,
+    options?: {
+      signal?: AbortSignal | undefined;
+    },
+  ) => Promise<AgentPermissionResponse>;
   requestUserInput?: (
     request: AgentUserInputRequest,
     options?: {
@@ -63,6 +73,7 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
     channel,
     client,
     logger,
+    permissionBridge,
     renderer,
     sessionStore,
     threadTs,
@@ -411,6 +422,25 @@ export function createActivitySink(options: ActivitySinkOptions): ActivitySink {
               ...(Object.keys(annotations).length > 0 ? { annotations } : {}),
             };
           },
+        }
+      : {}),
+    ...(permissionBridge
+      ? {
+          requestPermission: async (
+            request: AgentPermissionRequest,
+            requestOptions?: {
+              signal?: AbortSignal | undefined;
+            },
+          ): Promise<AgentPermissionResponse> =>
+            permissionBridge.requestPermission(client, {
+              channelId: channel,
+              description: request.description,
+              expectedUserId: userId,
+              input: request.input,
+              signal: requestOptions?.signal,
+              threadTs,
+              toolName: request.toolName,
+            }),
         }
       : {}),
 

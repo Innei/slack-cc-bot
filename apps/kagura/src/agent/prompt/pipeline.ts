@@ -1,22 +1,30 @@
 import type { AgentExecutionRequest } from '~/agent/types.js';
 
 import {
+  codingWorkflowProcessor,
+  collaborationRulesProcessor,
   fileContextProcessor,
+  hostCapabilityProcessor,
+  hostContractProcessor,
+  identityProcessor,
   imageCollectionProcessor,
   memoryContextProcessor,
-  memoryInstructionProcessor,
+  memoryPolicyProcessor,
   sessionContextProcessor,
-  systemRoleProcessor,
   threadContextProcessor,
-  toolDeclarationProcessor,
+  trustBoundaryProcessor,
   userMessageProcessor,
 } from './processors.js';
 import type { PromptAssembly, PromptAssemblyContext, PromptProcessor } from './types.js';
 
 export const DEFAULT_PROMPT_PROCESSORS: PromptProcessor[] = [
-  systemRoleProcessor,
-  toolDeclarationProcessor,
-  memoryInstructionProcessor,
+  identityProcessor,
+  hostContractProcessor,
+  trustBoundaryProcessor,
+  collaborationRulesProcessor,
+  hostCapabilityProcessor,
+  codingWorkflowProcessor,
+  memoryPolicyProcessor,
   sessionContextProcessor,
   memoryContextProcessor,
   threadContextProcessor,

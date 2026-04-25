@@ -36,6 +36,7 @@ export interface RuntimeApplication {
 }
 
 export interface RuntimeApplicationOptions {
+  claudePermissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
   defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
   executionProbePath?: string | undefined;
   instanceLabel?: string | undefined;
@@ -86,6 +87,7 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     memoryStore,
     channelPreferenceStore,
     executionProbe,
+    options?.claudePermissionMode ? { permissionMode: options.claudePermissionMode } : undefined,
   );
   const codexExecutor = new CodexCliExecutor(
     logger.withTag('codex:session'),

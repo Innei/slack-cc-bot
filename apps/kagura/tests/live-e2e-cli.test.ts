@@ -115,6 +115,17 @@ describe('resolveByIds', () => {
     expect(result.map((s) => s.id)).toEqual(['workspace-picker']);
   });
 
+  it('prefers exact id matches over earlier keyword matches', () => {
+    const result = resolveByIds(
+      [
+        makeScenario({ id: 'toolbar-first-message', keywords: ['workspace-label'] }),
+        makeScenario({ id: 'workspace-label', keywords: ['workspace'] }),
+      ],
+      ['workspace-label'],
+    );
+    expect(result.map((s) => s.id)).toEqual(['workspace-label']);
+  });
+
   it('deduplicates when the same scenario matches multiple args', () => {
     const result = resolveByIds(scenarios, ['full', 'mention']);
     expect(result.map((s) => s.id)).toEqual(['full']);

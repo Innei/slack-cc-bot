@@ -121,14 +121,25 @@ export class SlackThreadContextLoader {
   }
 }
 
-export function renderThreadPrompt(messages: NormalizedThreadMessage[]): string {
+export function renderThreadPrompt(
+  messages: NormalizedThreadMessage[],
+  options: { currentBotUserId?: string | undefined } = {},
+): string {
   const renderedLines = messages.flatMap((message, index) => {
     const body = renderMessageBody(message).trim();
     if (!body) {
       return [];
     }
-    const header = `Message ${index + 1} | ts=${message.ts} | author=${message.authorId ?? 'unknown'}`;
-    return [header, body];
+    const author = message.authorId ?? 'unknown';
+    const isCurrentBot =
+      options.currentBotUserId && message.authorId
+        ? String(message.authorId === options.currentBotUserId)
+        : 'unknown';
+    return [
+      `<message index="${index + 1}" ts="${escapeXmlAttribute(message.ts)}" author="${escapeXmlAttribute(author)}" is_current_bot="${isCurrentBot}">`,
+      body,
+      '</message>',
+    ];
   });
 
   return ['Slack thread context:', ...renderedLines].join('\n');
@@ -137,13 +148,29 @@ export function renderThreadPrompt(messages: NormalizedThreadMessage[]): string 
 function renderMessageBody(message: NormalizedThreadMessage): string {
   const lines: string[] = [];
   if (message.text.trim()) {
-    lines.push(message.text.trim());
+    lines.push('<text>', message.text.trim(), '</text>');
   }
   if (message.files.length > 0) {
-    lines.push(`Attached files: ${message.files.map((file) => file.fileName).join(', ')}`);
+    lines.push(
+      '<attached_files>',
+      ...message.files.map((file) => `- ${file.fileName}`),
+      '</attached_files>',
+    );
   }
   if (message.images.length > 0) {
-    lines.push(`Attached images: ${message.images.map((image) => image.fileName).join(', ')}`);
+    lines.push(
+      '<attached_images>',
+      ...message.images.map((image) => `- ${image.fileName}`),
+      '</attached_images>',
+    );
   }
   return lines.join('\n');
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
 }

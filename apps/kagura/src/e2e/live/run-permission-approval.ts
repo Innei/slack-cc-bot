@@ -8,9 +8,6 @@ import type { LiveE2EScenario } from './scenario.js';
 import { runDirectly } from './scenario.js';
 import { SlackApiClient } from './slack-api-client.js';
 
-// Override permission mode BEFORE env validation (dynamic import ensures ordering).
-process.env.CLAUDE_PERMISSION_MODE = 'default';
-
 const { createApplication } = await import('~/application.js');
 const { env } = await import('~/env/server.js');
 const { PERMISSION_APPROVE_ACTION_ID, PERMISSION_DENY_ACTION_ID } =
@@ -62,12 +59,12 @@ async function main(): Promise<void> {
       permissionMessagePosted: false,
     },
     passed: false,
-    permissionMode: env.CLAUDE_PERMISSION_MODE,
+    permissionMode: 'default',
     runId,
     targetToolName: 'Bash',
   };
 
-  const application = createApplication();
+  const application = createApplication({ claudePermissionMode: 'default' });
   let caughtError: unknown;
 
   try {
@@ -76,7 +73,7 @@ async function main(): Promise<void> {
 
     const prompt = [
       `<@${botIdentity.user_id}> PERMISSION_APPROVAL_E2E ${runId}.`,
-      'Run this exact bash command: echo "PERMISSION_E2E_OK"',
+      `Run this exact bash command: mkdir -p /tmp/kagura-permission-e2e && touch /tmp/kagura-permission-e2e/${runId}`,
       'Reply with the output of the command prefixed with "PERMISSION_E2E_RESULT".',
     ].join(' ');
 

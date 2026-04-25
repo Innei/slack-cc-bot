@@ -304,6 +304,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     channel: message.channel,
     client,
     logger: deps.logger,
+    permissionBridge: deps.permissionBridge,
     renderer: deps.renderer,
     sessionStore: deps.sessionStore,
     threadTs,

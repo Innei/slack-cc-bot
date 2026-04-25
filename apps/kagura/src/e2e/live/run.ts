@@ -69,7 +69,7 @@ async function main(): Promise<void> {
 
   const runId = randomUUID();
   const recallMarker = `CROSS_SESSION_MEMORY_MARKER ${runId}`;
-  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'kagura';
+  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || process.cwd();
   const targetFile =
     process.env.SLACK_E2E_TARGET_FILE?.trim() || 'src/slack/render/slack-renderer.ts';
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
@@ -394,13 +394,16 @@ function isSummaryLikeLoadingMessage(message: string): boolean {
 
 function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: LiveE2EResult): void {
   if (record.kind === 'status') {
+    const normalizedStatus = stripRenderedSlackStatusPrefix(record.status);
     if (
-      THINKING_STATUS_MESSAGES.includes(record.status as (typeof THINKING_STATUS_MESSAGES)[number])
+      THINKING_STATUS_MESSAGES.includes(
+        normalizedStatus as (typeof THINKING_STATUS_MESSAGES)[number],
+      )
     ) {
       result.matched.fallbackStatusObserved = true;
     }
 
-    if (isToolStatus(record.status)) {
+    if (isToolStatus(normalizedStatus)) {
       result.matched.toolStatus = true;
     }
 
@@ -409,11 +412,12 @@ function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: Live
     }
 
     for (const message of record.loadingMessages ?? []) {
-      if (isStreamDetailLoadingMessage(message)) {
+      const normalizedMessage = stripRenderedSlackStatusPrefix(message);
+      if (isStreamDetailLoadingMessage(normalizedMessage)) {
         result.matched.streamDetailLoadingMessage = true;
       }
 
-      if (isSummaryLikeLoadingMessage(message)) {
+      if (isSummaryLikeLoadingMessage(normalizedMessage)) {
         result.matched.summaryLikeLoadingMessage = true;
       }
     }
@@ -441,6 +445,12 @@ function applyProbeRecordAssertions(record: SlackStatusProbeRecord, result: Live
   if (isToolStatus(statusPart)) {
     result.matched.toolStatus = true;
   }
+  if (isStreamDetailLoadingMessage(statusPart)) {
+    result.matched.streamDetailLoadingMessage = true;
+  }
+  if (isSummaryLikeLoadingMessage(statusPart)) {
+    result.matched.summaryLikeLoadingMessage = true;
+  }
 
   for (const part of detailParts.map((item) => item.trim()).filter(Boolean)) {
     if (isStreamDetailLoadingMessage(part)) {
@@ -463,10 +473,15 @@ function allAssertionsSatisfied(result: LiveE2EResult): boolean {
     result.matched.clearCallObserved &&
     result.matched.progressMessagePosted &&
     result.matched.progressMessageUpdated &&
-    result.matched.progressMessageFinalized &&
+    (result.matched.progressMessageDeleted || result.matched.progressMessageFinalized) &&
     result.matched.workspaceBindingObserved &&
     result.matched.explicitMemoryPersisted
   );
+}
+
+function stripRenderedSlackStatusPrefix(value: string): string {
+  const withoutPrefix = value.startsWith('is ') ? value.slice(3) : value;
+  return withoutPrefix.replace(/^([a-z])/, (head) => head.toUpperCase());
 }
 
 function assertLiveE2EResult(result: LiveE2EResult): void {

@@ -8,13 +8,20 @@ export {
   assemblePrompt as runPromptPipeline,
 } from '~/agent/prompt/index.js';
 export {
+  codingWorkflowProcessor,
+  collaborationRulesProcessor,
   fileContextProcessor,
+  hostCapabilityProcessor,
+  hostContractProcessor,
+  identityProcessor,
   imageCollectionProcessor,
   memoryContextProcessor,
   memoryInstructionProcessor,
+  memoryPolicyProcessor,
   sessionContextProcessor,
   systemRoleProcessor,
   threadContextProcessor,
   toolDeclarationProcessor,
+  trustBoundaryProcessor,
   userMessageProcessor,
 } from '~/agent/prompt/index.js';

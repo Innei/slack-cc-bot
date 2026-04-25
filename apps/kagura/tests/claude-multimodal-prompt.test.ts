@@ -108,6 +108,17 @@ describe('prompt assembly', () => {
       expect(sp1).toBe(sp2);
     });
 
+    it('identifies Kagura as the host project', () => {
+      const { systemPrompt } = assemblePrompt(baseRequest());
+
+      expect(systemPrompt).toContain('PROJECT CONTEXT:');
+      expect(systemPrompt).toContain('Kagura is a Slack-native agent orchestration/runtime');
+      expect(systemPrompt).toContain(
+        'routing the thread to a configured local repository/workspace',
+      );
+      expect(systemPrompt).toContain('reply back through the same Slack thread');
+    });
+
     it('advertises Slack attachment read/write capability to the model', () => {
       const { systemPrompt } = assemblePrompt(baseRequest());
 
@@ -116,10 +127,10 @@ describe('prompt assembly', () => {
         'Supported Slack text/code files attached in the thread are downloaded and included in your context when available.',
       );
       expect(systemPrompt).toContain(
-        'Use upload_slack_file after creating a local file that must be delivered into Slack.',
+        'Use upload_slack_file after creating a local file that must be delivered into Slack when this provider exposes that tool directly.',
       );
       expect(systemPrompt).toContain(
-        'you must actually create and save the file locally, then call upload_slack_file; a text-only reply is not sufficient.',
+        'you must actually create and save the file locally, then use the available Kagura upload path; a text-only reply is not sufficient.',
       );
       expect(systemPrompt).toContain(
         'Do not claim that you cannot upload files or images to Slack when this flow applies.',
@@ -133,11 +144,34 @@ describe('prompt assembly', () => {
         'AskUserQuestion is disabled in this Slack host. Do not call it.',
       );
       expect(systemPrompt).toContain(
-        'If you need confirmation, approval, disambiguation, or a choice from another participant, ask in normal Slack-visible assistant text instead of calling AskUserQuestion.',
+        'Ask for confirmation, approval, disambiguation, or choices in normal Slack-visible assistant text.',
       );
       expect(systemPrompt).toContain(
         'Present choices as a concise numbered list such as 1, 2, 3, 4, with enough detail for the participant to choose.',
       );
+    });
+
+    it('keeps repository workflow conditional on implementation work', () => {
+      const { systemPrompt } = assemblePrompt(baseRequest());
+
+      expect(systemPrompt).toContain(
+        'Apply this workflow when the user asks you to modify files, run repo-changing commands, or produce implementation work in a Git workspace.',
+      );
+      expect(systemPrompt).toContain(
+        'For read-only analysis, inspect only the files and metadata needed to answer; do not fetch, rebase, or otherwise change repository state unless freshness is central to the request.',
+      );
+    });
+
+    it('discourages noisy routine memory summaries', () => {
+      const { systemPrompt } = assemblePrompt(baseRequest());
+
+      expect(systemPrompt).toContain('MEMORY POLICY:');
+      expect(systemPrompt).toContain('Save durable user preferences');
+      expect(systemPrompt).toContain('Save durable project decisions, facts, outcomes');
+      expect(systemPrompt).toContain(
+        'Do not save routine turn summaries, ephemeral status, transcript restatements',
+      );
+      expect(systemPrompt).not.toContain('Before finishing your response');
     });
   });
 
@@ -187,8 +221,9 @@ describe('prompt assembly', () => {
       expect(userText).toContain('<conversation_memory>');
     });
 
-    it('includes thread context for new sessions', () => {
+    it('includes previous thread context for new sessions', () => {
       const request = baseRequest({
+        currentTriggerTs: '200.000',
         threadContext: {
           messages: [
             {
@@ -200,16 +235,27 @@ describe('prompt assembly', () => {
               rawText: 'hello',
               threadTs: '100.000',
             },
+            {
+              text: 'current trigger',
+              ts: '200.000',
+              authorId: 'U9',
+              files: [],
+              images: [],
+              rawText: 'current trigger',
+              threadTs: '100.000',
+            },
           ],
           renderedPrompt: 'Message 1 | ts=100.000 | author=U1\nhello',
         },
       });
       const { userText } = assemblePrompt(request);
-      expect(userText).toContain('<thread_context>');
-      expect(userText).toContain('Message 1 | ts=100.000');
+      expect(userText).toContain('<thread_context_before_current_message>');
+      expect(userText).toContain('<message index="1" ts="100.000" author="U1"');
+      expect(userText).toContain('<text>\nhello\n</text>');
+      expect(userText).not.toContain('<text>\ncurrent trigger\n</text>');
     });
 
-    it('skips full thread context for resume sessions without a cursor', () => {
+    it('skips previous thread context for resume sessions without a cursor', () => {
       const request = baseRequest({
         resumeHandle: 'session-abc',
         threadContext: {
@@ -228,8 +274,7 @@ describe('prompt assembly', () => {
         },
       });
       const { userText } = assemblePrompt(request);
-      expect(userText).not.toContain('<thread_context>');
-      expect(userText).not.toContain('<slack_transcript_since_last_turn>');
+      expect(userText).not.toContain('<thread_context_before_current_message>');
     });
 
     it('injects incremental slack transcript on resume when a cursor is set', () => {
@@ -272,8 +317,7 @@ describe('prompt assembly', () => {
       });
       const { userText } = assemblePrompt(request);
 
-      expect(userText).not.toContain('<thread_context>');
-      expect(userText).toContain('<slack_transcript_since_last_turn>');
+      expect(userText).toContain('<thread_context_before_current_message>');
       expect(userText).toContain('bot reply visible in Slack between turns');
       expect(userText).not.toContain('earlier user turn (already in SDK history)');
       expect(userText).not.toContain('follow-up user message (current trigger)');
@@ -300,8 +344,7 @@ describe('prompt assembly', () => {
         },
       });
       const { userText } = assemblePrompt(request);
-      expect(userText).not.toContain('<thread_context>');
-      expect(userText).not.toContain('<slack_transcript_since_last_turn>');
+      expect(userText).not.toContain('<thread_context_before_current_message>');
     });
 
     it('includes user message in <user_message> tags', () => {
@@ -312,13 +355,13 @@ describe('prompt assembly', () => {
       expect(userText).toContain('</user_message>');
     });
 
-    it('includes user ID for new sessions but not resume', () => {
+    it('includes user ID for new and resumed current user messages', () => {
       const reqNew = baseRequest({ userId: 'U42', mentionText: 'hi' });
       const reqResume = baseRequest({ userId: 'U42', mentionText: 'hi', resumeHandle: 'sess' });
       const { userText: newPrompt } = assemblePrompt(reqNew);
       const { userText: resumePrompt } = assemblePrompt(reqResume);
       expect(newPrompt).toContain('From <@U42>');
-      expect(resumePrompt).not.toContain('From <@U42>');
+      expect(resumePrompt).toContain('From <@U42>');
     });
 
     it('includes loaded thread files in the user prompt as structured context', () => {

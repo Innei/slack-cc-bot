@@ -5,6 +5,7 @@ import type { SessionAnalyticsStore } from '~/analytics/types.js';
 import type { AppLogger } from '~/logger/index.js';
 import type { SessionStore } from '~/session/types.js';
 import { createActivitySink } from '~/slack/ingress/activity-sink.js';
+import type { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import type { SlackRenderer } from '~/slack/render/slack-renderer.js';
 import type { SlackWebClientLike } from '~/slack/types.js';
 
@@ -706,6 +707,44 @@ describe('createActivitySink', () => {
       'Third message',
       {},
     );
+  });
+
+  it('forwards permission requests to the Slack permission bridge', async () => {
+    const client = createMockClient();
+    const permissionBridge = {
+      requestPermission: vi.fn().mockResolvedValue({ allowed: true }),
+    } as unknown as SlackPermissionBridge;
+    const sink = createActivitySink({
+      channel: 'C123',
+      client,
+      logger: createTestLogger(),
+      permissionBridge,
+      renderer: createRendererStub(),
+      sessionStore: createMockSessionStore(),
+      threadTs: 'ts1',
+      userId: 'U123',
+    });
+
+    await expect(
+      sink.requestPermission?.(
+        {
+          description: 'Needs shell access',
+          input: { command: 'echo ok' },
+          toolName: 'Bash',
+        },
+        { signal: undefined },
+      ),
+    ).resolves.toEqual({ allowed: true });
+
+    expect(permissionBridge.requestPermission).toHaveBeenCalledWith(client, {
+      channelId: 'C123',
+      description: 'Needs shell access',
+      expectedUserId: 'U123',
+      input: { command: 'echo ok' },
+      signal: undefined,
+      threadTs: 'ts1',
+      toolName: 'Bash',
+    });
   });
 
   it('persists analytics on finalize when lifecycle completed and usage info available', async () => {

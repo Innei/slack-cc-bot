@@ -24,6 +24,7 @@ interface ProgressRetainedResult {
   matched: {
     assistantReplied: boolean;
     progressMessageFinalized: boolean;
+    progressMessageDeleted: boolean;
     progressMessageHasNoToolHistory: boolean;
     progressMessagePosted: boolean;
     progressMessageRetainedInThread: boolean;
@@ -44,7 +45,7 @@ async function main(): Promise<void> {
   }
 
   const runId = randomUUID();
-  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'kagura';
+  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || process.cwd();
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
   const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
   const botIdentity = await botClient.authTest();
@@ -57,6 +58,7 @@ async function main(): Promise<void> {
     matched: {
       assistantReplied: false,
       progressMessageFinalized: false,
+      progressMessageDeleted: false,
       progressMessageHasNoToolHistory: false,
       progressMessagePosted: false,
       progressMessageRetainedInThread: false,
@@ -108,6 +110,8 @@ async function main(): Promise<void> {
             result.matched.progressMessagePosted = true;
           } else if (record.action === 'finalize') {
             result.matched.progressMessageFinalized = true;
+          } else if (record.action === 'delete') {
+            result.matched.progressMessageDeleted = true;
           }
         }
       }
@@ -119,7 +123,10 @@ async function main(): Promise<void> {
         result.matched.assistantReplied = true;
       }
 
-      if (result.matched.assistantReplied && result.matched.progressMessageFinalized) {
+      if (
+        result.matched.assistantReplied &&
+        (result.matched.progressMessageFinalized || result.matched.progressMessageDeleted)
+      ) {
         await delay(2_000);
 
         const finalReplies = await botClient.conversationReplies({
@@ -129,16 +136,21 @@ async function main(): Promise<void> {
           ts: rootMessage.ts,
         });
 
-        const finalizedTs = findFinalizedProgressMessageTs(result.probeRecords);
-        const retained = findMessageByTs(finalReplies, finalizedTs);
-        if (retained) {
-          result.matched.progressMessageRetainedInThread = true;
-          result.finalizedMessageText = retained.text ?? undefined;
-          result.finalizedMessageBlocks = retained.blocks ?? undefined;
-          result.matched.progressMessageHasNoToolHistory = !containsToolHistory(
-            retained.text,
-            retained.blocks,
-          );
+        if (result.matched.progressMessageDeleted) {
+          result.matched.progressMessageRetainedInThread = false;
+          result.matched.progressMessageHasNoToolHistory = true;
+        } else {
+          const finalizedTs = findFinalizedProgressMessageTs(result.probeRecords);
+          const retained = findMessageByTs(finalReplies, finalizedTs);
+          if (retained) {
+            result.matched.progressMessageRetainedInThread = true;
+            result.finalizedMessageText = retained.text ?? undefined;
+            result.finalizedMessageBlocks = retained.blocks ?? undefined;
+            result.matched.progressMessageHasNoToolHistory = !containsToolHistory(
+              retained.text,
+              retained.blocks,
+            );
+          }
         }
         break;
       }
@@ -155,6 +167,7 @@ async function main(): Promise<void> {
     console.info('Root thread: %s', result.rootMessageTs);
     console.info('Assistant reply: %s', result.assistantReplyTs);
     console.info('Progress finalized: %s', result.matched.progressMessageFinalized);
+    console.info('Progress deleted: %s', result.matched.progressMessageDeleted);
     console.info('Retained in thread: %s', result.matched.progressMessageRetainedInThread);
     console.info(
       'Retained progress has no tool history: %s',
@@ -239,13 +252,13 @@ function assertResult(result: ProgressRetainedResult): void {
   if (!result.matched.progressMessagePosted) {
     failures.push('progress message was never posted');
   }
-  if (!result.matched.progressMessageFinalized) {
-    failures.push('progress message was not finalized (probe has no finalize action)');
+  if (!result.matched.progressMessageFinalized && !result.matched.progressMessageDeleted) {
+    failures.push('progress message was neither finalized nor deleted');
   }
-  if (!result.matched.progressMessageRetainedInThread) {
+  if (result.matched.progressMessageFinalized && !result.matched.progressMessageRetainedInThread) {
     failures.push('finalized progress message is not visible in thread replies');
   }
-  if (!result.matched.progressMessageHasNoToolHistory) {
+  if (result.matched.progressMessageFinalized && !result.matched.progressMessageHasNoToolHistory) {
     failures.push('finalized progress message still contains tool-history summary text');
   }
 
@@ -272,9 +285,9 @@ function delay(ms: number): Promise<void> {
 
 export const scenario: LiveE2EScenario = {
   id: 'progress-retained',
-  title: 'Progress Message Retained After Reply',
+  title: 'Progress Message Cleaned Up After Reply',
   description:
-    'Verify that the progress message is finalized (not deleted) when the assistant replies, remains visible in the thread, and no longer shows tool-history summary text after completion.',
+    'Verify that the progress message is cleaned up when the assistant replies, either by deletion or by finalizing without tool-history summary text.',
   keywords: ['progress', 'retained', 'finalize', 'cleanup', 'collapse'],
   run: main,
 };

@@ -73,6 +73,30 @@ describe('WorkspaceResolver', () => {
     expect(resolution.workspace.workspacePath).toBe(subdirPath);
     expect(resolution.workspace.workspaceLabel).toBe('team/kagura/packages/bot');
   });
+
+  it('does not treat repeated matches inside one repository as ambiguous', () => {
+    const repoRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-resolver-'));
+    const repoPath = createRepo(repoRoot, 'team/kagura');
+    const subdirPath = path.join(repoPath, 'packages', 'bot');
+    fs.mkdirSync(subdirPath, { recursive: true });
+
+    const resolver = new WorkspaceResolver({
+      repoRootDir: repoRoot,
+      scanDepth: 2,
+    });
+
+    const resolution = resolver.resolveFromText(
+      `Use repository ${subdirPath} for this task. Reply with WORKSPACE_OK ${subdirPath}.`,
+    );
+
+    expect(resolution.status).toBe('unique');
+    if (resolution.status !== 'unique') {
+      return;
+    }
+
+    expect(resolution.workspace.workspacePath).toBe(subdirPath);
+    expect(resolution.workspace.workspaceLabel).toBe('team/kagura/packages/bot');
+  });
 });
 
 function createRepo(repoRoot: string, relativePath: string): string {

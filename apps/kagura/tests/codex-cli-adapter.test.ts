@@ -497,8 +497,8 @@ describe('CodexCliExecutor', () => {
 
   it('renders Codex memory file writes as a concise memory activity', async () => {
     const request = createRequest({ executionId: 'exec-memory' });
-    const { memoryOpsPath, runtimeDir } = getCodexRuntimePaths(request);
-    const command = `/bin/zsh -lc "mkdir -p ${runtimeDir} && printf '%s\\n' '{\\"tool\\":\\"save_memory\\",\\"category\\":\\"decision\\",\\"content\\":\\"remember\\"}' >> ${memoryOpsPath}"`;
+    const { memoryOpsPath } = getCodexRuntimePaths(request);
+    const command = `/bin/zsh -lc "node -e 'const fs=require(\\"fs\\"); const p=\\"${memoryOpsPath}\\"; fs.appendFileSync(p, \\"{}\\\\n\\");'"`;
 
     spawnMock.mockImplementation(
       () =>

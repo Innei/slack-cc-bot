@@ -61,12 +61,12 @@ export function resolveByIds(scenarios: LiveE2EScenario[], ids: string[]): LiveE
   const resolved: LiveE2EScenario[] = [];
   for (const id of ids) {
     const needle = id.toLowerCase();
-    const match = scenarios.find(
-      (s) =>
-        s.id.toLowerCase() === needle ||
-        s.id.toLowerCase().includes(needle) ||
-        s.keywords.some((k) => k.toLowerCase() === needle),
-    );
+    const match =
+      scenarios.find((s) => s.id.toLowerCase() === needle) ??
+      scenarios.find(
+        (s) =>
+          s.id.toLowerCase().includes(needle) || s.keywords.some((k) => k.toLowerCase() === needle),
+      );
     if (!match) {
       throw new Error(`No scenario matching "${id}". Use --list to see available scenarios.`);
     }

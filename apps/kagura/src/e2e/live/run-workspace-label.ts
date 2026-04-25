@@ -41,7 +41,7 @@ async function main(): Promise<void> {
   }
 
   const runId = randomUUID();
-  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || 'kagura';
+  const targetRepo = process.env.SLACK_E2E_TARGET_REPO?.trim() || process.cwd();
   const triggerClient = new SlackApiClient(env.SLACK_E2E_TRIGGER_USER_TOKEN);
   const botClient = new SlackApiClient(env.SLACK_BOT_TOKEN);
   const botIdentity = await botClient.authTest();

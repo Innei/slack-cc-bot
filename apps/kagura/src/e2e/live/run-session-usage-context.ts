@@ -251,8 +251,7 @@ function isUsageSummaryText(text: string | undefined): boolean {
   const normalized = text.trim();
   return (
     /^\d+(?:\.\d+)?s\b/.test(normalized) &&
-    /\$\d+\.\d{4}\b/.test(normalized) &&
-    /\btokens\b/.test(normalized) &&
+    /\bnon-cached in \+ out\b/.test(normalized) &&
     /\(\d+% cache\)/.test(normalized)
   );
 }

@@ -24,8 +24,8 @@ const ABORT_KILL_TIMEOUT_MS = 1_000;
 const MAX_GENERATED_ARTIFACT_BYTES = 50 * 1024 * 1024;
 const GENERATED_IMAGE_FILENAME = /\.(?:gif|jpe?g|png|webp)$/i;
 const MEMORY_CATEGORY_SET = new Set<string>(MEMORY_CATEGORIES);
-const CODEX_MEMORY_OPS_COMMAND_PATTERN = /[^\s"'\\]*-memory-ops\.jsonl(?:$|[\s"'])/;
-const CODEX_CHANNEL_OPS_COMMAND_PATTERN = /[^\s"'\\]*-channel-ops\.jsonl(?:$|[\s"'])/;
+const CODEX_MEMORY_OPS_COMMAND_PATTERN = /-memory-ops\.jsonl(?:$|[\s"'\\])/;
+const CODEX_CHANNEL_OPS_COMMAND_PATTERN = /-channel-ops\.jsonl(?:$|[\s"'\\])/;
 
 interface GeneratedArtifactSnapshotEntry {
   mtimeMs: number;
