@@ -61,6 +61,10 @@
       "simple-git-hooks",
       "unrs-resolver",
       "better-sqlite3"
-    ]
+    ],
+    "overrides": {
+      "@esbuild-kit/core-utils>esbuild": "0.25.12",
+      "vite": "8.0.10"
+    }
   }
 }
