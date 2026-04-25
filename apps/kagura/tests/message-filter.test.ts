@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { AppLogger } from '~/logger/index.js';
 import {
+  createBotIdentityResolver,
   createBotUserIdResolver,
   shouldSkipBotAuthoredMessage,
   shouldSkipBotAuthoredMessageFromUnjoinedSender,
@@ -310,5 +311,36 @@ describe('createBotUserIdResolver', () => {
 
     const result = await resolver(client);
     expect(result).toBeUndefined();
+  });
+});
+
+describe('createBotIdentityResolver', () => {
+  it('resolves and caches Slack bot identity metadata', async () => {
+    const logger = createTestLogger();
+    const resolver = createBotIdentityResolver(logger);
+    const client = {
+      auth: {
+        test: vi.fn().mockResolvedValue({
+          bot_id: 'B_BOT',
+          team: 'Acme',
+          team_id: 'T123',
+          user: 'kagura',
+          user_id: 'U_BOT',
+        }),
+      },
+    } as unknown as SlackWebClientLike;
+
+    const first = await resolver(client);
+    const second = await resolver(client);
+
+    expect(first).toEqual({
+      botId: 'B_BOT',
+      team: 'Acme',
+      teamId: 'T123',
+      userId: 'U_BOT',
+      userName: 'kagura',
+    });
+    expect(second).toEqual(first);
+    expect(client.auth!.test).toHaveBeenCalledOnce();
   });
 });

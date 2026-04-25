@@ -18,6 +18,11 @@ export interface SlackAssistantApi {
 
 export interface SlackAuthApi {
   test: () => Promise<{
+    bot_id?: string;
+    name?: string;
+    team?: string;
+    team_id?: string;
+    user?: string;
     user_id?: string;
   }>;
 }

@@ -134,8 +134,9 @@ export const sessionContextProcessor: PromptProcessor = {
     ];
 
     if (request.botUserId) {
+      const nameSuffix = request.botUserName ? `, name ${request.botUserName}` : '';
       lines.push(
-        `Your current Slack app identity is <@${request.botUserId}> (user id ${request.botUserId}).`,
+        `Your current Slack app identity is <@${request.botUserId}> (user id ${request.botUserId}${nameSuffix}).`,
       );
     }
 

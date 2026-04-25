@@ -189,6 +189,15 @@ describe('prompt assembly', () => {
       expect(userText).toContain('thread 999.000');
     });
 
+    it('includes current Slack app id and name when provided', () => {
+      const request = baseRequest({ botUserId: 'U_BOT', botUserName: 'kagura-codex' });
+      const { userText } = assemblePrompt(request);
+
+      expect(userText).toContain(
+        'Your current Slack app identity is <@U_BOT> (user id U_BOT, name kagura-codex).',
+      );
+    });
+
     it('includes workspace info in context when set', () => {
       const request = baseRequest({
         workspacePath: '/repos/my-project',

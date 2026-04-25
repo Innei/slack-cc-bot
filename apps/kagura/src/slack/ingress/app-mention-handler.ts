@@ -9,7 +9,7 @@ import { SlackMessageSchema } from '~/schemas/slack/message.js';
 import type { SlackWebClientLike } from '../types.js';
 import { handleThreadConversation } from './conversation-pipeline.js';
 import {
-  createBotUserIdResolver,
+  createBotIdentityResolver,
   shouldSkipBotAuthoredMessage,
   shouldSkipBotAuthoredMessageFromUnjoinedSender,
   shouldSkipMessageForForeignMention,
@@ -36,13 +36,14 @@ const DEFAULT_ASSISTANT_PROMPTS = [
 ] as const;
 
 export function createAppMentionHandler(deps: SlackIngressDependencies) {
-  const getBotUserId = createBotUserIdResolver(deps.logger);
+  const getBotIdentity = createBotIdentityResolver(deps.logger);
 
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const mention = zodParse(SlackAppMentionEventSchema, args.event, 'SlackAppMentionEvent');
     const client = args.client as SlackWebClientLike;
     const threadTs = mention.thread_ts ?? mention.ts;
-    const botUserId = await getBotUserId(client);
+    const botIdentity = await getBotIdentity(client);
+    const botUserId = botIdentity?.userId;
     const rawMention = mention as {
       bot_id?: string | undefined;
       subtype?: string | undefined;
@@ -97,6 +98,7 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
       {
         logLabel: 'app mention',
         addAcknowledgementReaction: true,
+        currentBotUserName: botIdentity?.userName,
         currentBotUserId: botUserId,
         rootMessageTs: mention.ts,
       },
@@ -105,7 +107,7 @@ export function createAppMentionHandler(deps: SlackIngressDependencies) {
 }
 
 export function createThreadReplyHandler(deps: SlackIngressDependencies) {
-  const getBotUserId = createBotUserIdResolver(deps.logger);
+  const getBotIdentity = createBotIdentityResolver(deps.logger);
 
   return async (args: { client: unknown; event: unknown }): Promise<void> => {
     const parsed = SlackMessageSchema.safeParse(args.event);
@@ -142,7 +144,8 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       }
     }
 
-    const botUserId = await getBotUserId(client);
+    const botIdentity = await getBotIdentity(client);
+    const botUserId = botIdentity?.userId;
     const mentionsCurrentBot = mentionsUser(message.text, botUserId);
     const session = deps.sessionStore.get(threadTs);
     if (!session && !mentionsCurrentBot) {
@@ -237,6 +240,7 @@ export function createThreadReplyHandler(deps: SlackIngressDependencies) {
       {
         logLabel: 'thread reply',
         addAcknowledgementReaction: false,
+        currentBotUserName: botIdentity?.userName,
         currentBotUserId: botUserId,
         rootMessageTs: session?.rootMessageTs ?? threadTs,
       },
@@ -272,7 +276,7 @@ export function createAssistantThreadStartedHandler(
 export function createAssistantUserMessageHandler(
   deps: SlackIngressDependencies,
 ): AssistantUserMessageMiddleware {
-  const getBotUserId = createBotUserIdResolver(deps.logger);
+  const getBotIdentity = createBotIdentityResolver(deps.logger);
 
   return async (args) => {
     const parsed = SlackMessageSchema.safeParse(args.message);
@@ -325,7 +329,8 @@ export function createAssistantUserMessageHandler(
     }
 
     const client = args.client as unknown as SlackWebClientLike;
-    const botUserId = await getBotUserId(client);
+    const botIdentity = await getBotIdentity(client);
+    const botUserId = botIdentity?.userId;
     if (
       shouldSkipMessageForForeignMention(
         deps.logger,
@@ -360,6 +365,8 @@ export function createAssistantUserMessageHandler(
       {
         logLabel: 'assistant user message',
         addAcknowledgementReaction: false,
+        currentBotUserName: botIdentity?.userName,
+        currentBotUserId: botUserId,
         rootMessageTs: threadTs,
       },
     );

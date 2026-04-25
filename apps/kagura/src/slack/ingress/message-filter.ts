@@ -5,16 +5,34 @@ import type { SlackWebClientLike } from '../types.js';
 
 const SLACK_USER_MENTION_PATTERN = /<@([\dA-Z]+)>/g;
 
+export interface SlackBotIdentity {
+  botId?: string | undefined;
+  team?: string | undefined;
+  teamId?: string | undefined;
+  userId: string;
+  userName?: string | undefined;
+}
+
+export function createBotIdentityResolver(
+  logger: AppLogger,
+): (client: SlackWebClientLike) => Promise<SlackBotIdentity | undefined> {
+  let cachedBotIdentity: Promise<SlackBotIdentity | undefined> | undefined;
+
+  return async (client: SlackWebClientLike): Promise<SlackBotIdentity | undefined> => {
+    if (!cachedBotIdentity) {
+      cachedBotIdentity = resolveBotIdentity(client, logger);
+    }
+    return cachedBotIdentity;
+  };
+}
+
 export function createBotUserIdResolver(
   logger: AppLogger,
 ): (client: SlackWebClientLike) => Promise<string | undefined> {
-  let cachedBotUserId: Promise<string | undefined> | undefined;
+  const getBotIdentity = createBotIdentityResolver(logger);
 
   return async (client: SlackWebClientLike): Promise<string | undefined> => {
-    if (!cachedBotUserId) {
-      cachedBotUserId = resolveBotUserId(client, logger);
-    }
-    return cachedBotUserId;
+    return (await getBotIdentity(client))?.userId;
   };
 }
 
@@ -154,10 +172,10 @@ export async function shouldSkipBotAuthoredMessageFromUnjoinedSender(
   return true;
 }
 
-async function resolveBotUserId(
+async function resolveBotIdentity(
   client: SlackWebClientLike,
   logger: AppLogger,
-): Promise<string | undefined> {
+): Promise<SlackBotIdentity | undefined> {
   if (!client.auth?.test) {
     runtimeWarn(logger, 'Slack client does not expose auth.test; mention filtering disabled');
     return undefined;
@@ -173,7 +191,14 @@ async function resolveBotUserId(
       );
       return undefined;
     }
-    return botUserId;
+    const userName = identity.name?.trim() || identity.user?.trim() || undefined;
+    return {
+      ...(identity.bot_id?.trim() ? { botId: identity.bot_id.trim() } : {}),
+      ...(identity.team?.trim() ? { team: identity.team.trim() } : {}),
+      ...(identity.team_id?.trim() ? { teamId: identity.team_id.trim() } : {}),
+      userId: botUserId,
+      ...(userName ? { userName } : {}),
+    };
   } catch (error) {
     runtimeWarn(logger, 'Failed to resolve bot user id for mention filtering: %s', String(error));
     return undefined;

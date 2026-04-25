@@ -185,6 +185,8 @@ describe('thread reply ingress', () => {
     const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
       .calls[0]!;
     expect(request).toMatchObject({
+      botUserId: 'U_BOT',
+      botUserName: 'kagura',
       channelId: 'C123',
       mentionText: '<@U_BOT> please inspect the history',
       threadTs,
@@ -541,7 +543,7 @@ function createSlackClientFixture(): SlackWebClientLike & {
       },
     },
     auth: {
-      test: vi.fn().mockResolvedValue({ user_id: 'U_BOT' }),
+      test: vi.fn().mockResolvedValue({ user: 'kagura', user_id: 'U_BOT' }),
     },
     chat: {
       delete: vi.fn().mockResolvedValue({}),
