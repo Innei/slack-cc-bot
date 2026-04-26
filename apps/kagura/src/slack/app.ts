@@ -13,12 +13,14 @@ import type { WorkspaceResolver } from '~/workspace/resolver.js';
 import { registerSlashCommands } from './commands/register.js';
 import { SlackThreadContextLoader } from './context/thread-context-loader.js';
 import type { ThreadExecutionRegistry } from './execution/thread-execution-registry.js';
+import type { A2ACoordinatorStore } from './ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from './ingress/agent-team-routing.js';
 import {
   createAppMentionHandler,
   createAssistantThreadStartedHandler,
   createAssistantUserMessageHandler,
   createThreadReplyHandler,
+  startA2ASummaryPoller,
   WORKSPACE_PICKER_ACTION_ID,
 } from './ingress/app-mention-handler.js';
 import { createHomeTabHandler, HOME_TAB_REFRESH_ACTION_ID } from './ingress/home-tab-handler.js';
@@ -44,8 +46,10 @@ import { createWorkspacePickerActionHandler } from './interactions/workspace-pic
 import { createSlackNetworkAgent, createSlackWebClientOptions } from './network-guard.js';
 import { SlackRenderer } from './render/slack-renderer.js';
 import type { SlackStatusProbe } from './render/status-probe.js';
+import type { SlackWebClientLike } from './types.js';
 
 export interface SlackApplicationDependencies {
+  a2aCoordinatorStore?: A2ACoordinatorStore | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
@@ -66,12 +70,17 @@ export interface SlackAppCredentials {
   signingSecret: string;
 }
 
+export type KaguraSlackApp = App & {
+  startA2ASummaryPoller?: () => void;
+  stopA2ASummaryPoller?: () => void;
+};
+
 export function createSlackApp(
   deps: SlackApplicationDependencies,
   options?: {
     credentials?: SlackAppCredentials | undefined;
   },
-): App {
+): KaguraSlackApp {
   const networkAgent = createSlackNetworkAgent();
   const credentials = options?.credentials ?? {
     appToken: env.SLACK_APP_TOKEN,
@@ -93,6 +102,7 @@ export function createSlackApp(
     deps.providerRegistry.defaultProviderId,
   );
   const ingressDeps = {
+    a2aCoordinatorStore: deps.a2aCoordinatorStore,
     analyticsStore: deps.analyticsStore,
     agentTeams: deps.agentTeams,
     channelPreferenceStore: deps.channelPreferenceStore,
@@ -112,6 +122,7 @@ export function createSlackApp(
     threadStarted: createAssistantThreadStartedHandler(ingressDeps),
     userMessage: createAssistantUserMessageHandler(ingressDeps),
   });
+  let stopA2ASummaryPoller: (() => void) | undefined;
 
   const homeTabHandler = createHomeTabHandler({
     analyticsStore: deps.analyticsStore,
@@ -171,5 +182,16 @@ export function createSlackApp(
     deps.logger.error('Slack Bolt unhandled error: %s', redactUnknown(error));
   });
 
-  return app;
+  const kaguraApp = app as KaguraSlackApp;
+  kaguraApp.startA2ASummaryPoller = () => {
+    stopA2ASummaryPoller ??= startA2ASummaryPoller(
+      app.client as unknown as SlackWebClientLike,
+      ingressDeps,
+    );
+  };
+  kaguraApp.stopA2ASummaryPoller = () => {
+    stopA2ASummaryPoller?.();
+    stopA2ASummaryPoller = undefined;
+  };
+  return kaguraApp;
 }

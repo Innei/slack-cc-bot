@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import { resolveKaguraPaths } from '@kagura/cli/config/paths';
-import type { App } from '@slack/bolt';
 
 import { ClaudeAgentSdkExecutor } from '~/agent/providers/claude-code/adapter.js';
 import { CodexCliExecutor } from '~/agent/providers/codex-cli/adapter.js';
@@ -17,12 +16,13 @@ import { appConfigAgentTeams, env, validateLiveE2EEnv } from '~/env/server.js';
 import { type AppLogger, createRootLogger } from '~/logger/index.js';
 import { SqliteMemoryStore } from '~/memory/memory-store.js';
 import { SqliteSessionStore } from '~/session/sqlite-session-store.js';
-import { createSlackApp, type SlackAppCredentials } from '~/slack/app.js';
+import { createSlackApp, type KaguraSlackApp, type SlackAppCredentials } from '~/slack/app.js';
 import { syncSlashCommands } from '~/slack/commands/manifest-sync.js';
 import {
   createThreadExecutionRegistry,
   type ThreadExecutionRegistry,
 } from '~/slack/execution/thread-execution-registry.js';
+import { SqliteA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import { SlackPermissionBridge } from '~/slack/interaction/permission-bridge.js';
 import { SlackUserInputBridge } from '~/slack/interaction/user-input-bridge.js';
@@ -37,6 +37,7 @@ export interface RuntimeApplication {
 }
 
 export interface RuntimeApplicationOptions {
+  a2aCoordinatorDbPath?: string | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   claudePermissionMode?: typeof env.CLAUDE_PERMISSION_MODE | undefined;
   defaultProviderId?: 'claude-code' | 'codex-cli' | undefined;
@@ -61,6 +62,12 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         : path.resolve(process.cwd(), env.SESSION_DB_PATH);
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   const { db, sqlite } = createDatabase(dbPath);
+  const a2aCoordinatorDbPath = path.resolve(
+    process.cwd(),
+    options?.a2aCoordinatorDbPath ?? env.A2A_COORDINATOR_DB_PATH,
+  );
+  fs.mkdirSync(path.dirname(a2aCoordinatorDbPath), { recursive: true });
+  const a2aCoordinatorStore = new SqliteA2ACoordinatorStore(a2aCoordinatorDbPath);
   const sessionStore = new SqliteSessionStore(db, logger.withTag('session'));
   const memoryStore = new SqliteMemoryStore(db, logger.withTag('memory'));
   const channelPreferenceStore = new SqliteChannelPreferenceStore(
@@ -108,8 +115,9 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
     logger: logger.withTag('slack:execution'),
   });
 
-  const slackApp: App = createSlackApp(
+  const slackApp: KaguraSlackApp = createSlackApp(
     {
+      a2aCoordinatorStore,
       analyticsStore,
       agentTeams: options?.agentTeams ?? appConfigAgentTeams,
       channelPreferenceStore,
@@ -149,11 +157,14 @@ export function createApplication(options?: RuntimeApplicationOptions): RuntimeA
         });
       }
       await startSlackAppWithRetry(() => slackApp.start(), logger.withTag('slack:socket'));
+      slackApp.startA2ASummaryPoller?.();
       logger.info('Slack Socket Mode application started.');
     },
     async stop() {
+      slackApp.stopA2ASummaryPoller?.();
       await slackApp.stop();
       await providerRegistry.drain();
+      a2aCoordinatorStore.close?.();
       sqlite.close();
       logger.info('Slack Socket Mode application stopped.');
     },

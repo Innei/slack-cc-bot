@@ -234,6 +234,14 @@ export async function resolveSessionStep(
   ctx: ConversationPipelineContext,
 ): Promise<PipelineStepResult> {
   const { deps, message, options, threadTs, workspace } = ctx;
+  const a2aFields = options.a2aContext
+    ? {
+        a2aLead: options.a2aContext.lead,
+        a2aParticipantsJson: JSON.stringify(options.a2aContext.participants),
+        ...(options.a2aContext.teamId ? { a2aTeamId: options.a2aContext.teamId } : {}),
+        conversationMode: 'a2a' as const,
+      }
+    : {};
 
   const { resumeHandle, session } = resolveAndPersistSession(
     threadTs,
@@ -246,7 +254,12 @@ export async function resolveSessionStep(
   ctx.resumeHandle = resumeHandle;
   ctx.previousTurnTriggerTs = resumeHandle ? session.lastTurnTriggerTs : undefined;
 
-  deps.sessionStore.patch(threadTs, { lastTurnTriggerTs: message.ts });
+  deps.sessionStore.patch(threadTs, {
+    ...a2aFields,
+    ...(options.agentProviderOverride ? { agentProvider: options.agentProviderOverride } : {}),
+    lastTurnTriggerTs: message.ts,
+  });
+  ctx.existingSession = deps.sessionStore.get(threadTs) ?? ctx.existingSession;
 
   return CONTINUE;
 }
@@ -298,7 +311,7 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
       });
   }
 
-  const executor = resolveExecutor(ctx.existingSession, deps);
+  const executor = resolveExecutor(ctx.existingSession, deps, ctx.options.agentProviderOverride);
   const sink = createActivitySink({
     analyticsStore: deps.analyticsStore,
     channel: message.channel,
@@ -413,6 +426,22 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
     );
     releaseExecutionFromRegistry();
     await sink.finalize();
+    if (ctx.options.a2aAssignmentId && ctx.options.currentBotUserId && deps.a2aCoordinatorStore) {
+      const terminalPhase =
+        sink.terminalPhase === 'completed' ||
+        sink.terminalPhase === 'failed' ||
+        sink.terminalPhase === 'stopped'
+          ? sink.terminalPhase
+          : 'failed';
+      deps.a2aCoordinatorStore.markAgentTerminal(
+        ctx.options.a2aAssignmentId,
+        ctx.options.currentBotUserId,
+        terminalPhase,
+      );
+    }
+    if (ctx.options.a2aSummaryAssignmentId && deps.a2aCoordinatorStore) {
+      deps.a2aCoordinatorStore.markSummaryCompleted(ctx.options.a2aSummaryAssignmentId);
+    }
     if (ctx.options.addAcknowledgementReaction && sink.terminalPhase === 'completed') {
       await deps.renderer
         .addCompletionReaction(client, message.channel, message.ts)
@@ -435,7 +464,11 @@ export async function executeAgent(ctx: ConversationPipelineContext): Promise<Pi
 function resolveExecutor(
   session: SessionRecord | undefined,
   deps: SlackIngressDependencies,
+  providerOverride: string | undefined,
 ): AgentExecutor {
+  if (providerOverride && deps.providerRegistry?.has(providerOverride)) {
+    return deps.providerRegistry.getExecutor(providerOverride);
+  }
   if (session?.agentProvider && deps.providerRegistry?.has(session.agentProvider)) {
     return deps.providerRegistry.getExecutor(session.agentProvider);
   }

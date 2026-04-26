@@ -7,6 +7,8 @@ import type { MemoryStore } from '~/memory/types.js';
 import type { SessionRecord, SessionStore } from '~/session/types.js';
 import type { SlackThreadContextLoader } from '~/slack/context/thread-context-loader.js';
 import { createThreadExecutionRegistry } from '~/slack/execution/thread-execution-registry.js';
+import type { A2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
+import { MemoryA2ACoordinatorStore } from '~/slack/ingress/a2a-coordinator-store.js';
 import type { AgentTeamsConfig } from '~/slack/ingress/agent-team-routing.js';
 import {
   createAppMentionHandler,
@@ -166,13 +168,15 @@ describe('thread reply ingress', () => {
     expect(threadContextLoader.loadThread).toHaveBeenCalledOnce();
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
     expect(sessionStore.get(threadTs)).toMatchObject({
+      a2aLead: 'U_BOT',
       channelId: 'C123',
+      conversationMode: 'a2a',
       rootMessageTs: threadTs,
       threadTs,
     });
   });
 
-  it('keeps a root Slack user-group mention on standby for non-lead members', async () => {
+  it('records a root Slack user-group mention on standby for non-lead members', async () => {
     const threadTs = '1712345678.000116';
     const { claudeExecutor, client, handler, renderer, sessionStore, threadContextLoader } =
       createThreadReplyTestHarness(threadTs, {
@@ -200,7 +204,246 @@ describe('thread reply ingress', () => {
     expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
     expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
     expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
-    expect(sessionStore.get(threadTs)).toBeUndefined();
+    expect(sessionStore.get(threadTs)).toMatchObject({
+      a2aLead: 'U_OTHER_BOT',
+      channelId: 'C123',
+      conversationMode: 'a2a',
+      rootMessageTs: threadTs,
+      threadTs,
+    });
+  });
+
+  it('lets the lead handle an A2A thread reply without an explicit mention', async () => {
+    const threadTs = '1712345678.000118';
+    const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+    });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: 'please continue',
+        thread_ts: threadTs,
+        ts: '1712345678.000119',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+  });
+
+  it('lets the A2A lead handle a root-authored bot reply without an explicit mention', async () => {
+    const threadTs = '1712345678.000129';
+    const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+    });
+    client.conversations.replies.mockResolvedValue({
+      messages: [{ ts: threadTs, user: 'U_TRIGGER', text: 'root' }],
+    });
+
+    await handler({
+      client,
+      event: {
+        bot_id: 'B_TRIGGER',
+        channel: 'C123',
+        team: 'T123',
+        text: 'please continue',
+        thread_ts: threadTs,
+        ts: '1712345678.000130',
+        type: 'message',
+        user: 'U_TRIGGER',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+  });
+
+  it('keeps the A2A lead idle for non-root bot-authored participant replies', async () => {
+    const threadTs = '1712345678.000131';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+      });
+    client.conversations.replies.mockResolvedValue({
+      messages: [{ ts: threadTs, user: 'U_TRIGGER', text: 'root' }],
+    });
+
+    await handler({
+      client,
+      event: {
+        bot_id: 'B_OTHER',
+        channel: 'C123',
+        team: 'T123',
+        text: 'A2A worker finished',
+        thread_ts: threadTs,
+        ts: '1712345678.000132',
+        type: 'message',
+        user: 'U_OTHER_BOT',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
+    expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
+  });
+
+  it('keeps non-lead A2A participants idle when a user reply has no explicit mention', async () => {
+    const threadTs = '1712345678.000120';
+    const { claudeExecutor, client, handler, renderer, threadContextLoader } =
+      createThreadReplyTestHarness(threadTs, {
+        initialSessions: [createA2ASession(threadTs, { lead: 'U_OTHER_BOT' })],
+      });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: 'please continue',
+        thread_ts: threadTs,
+        ts: '1712345678.000121',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(renderer.showThinkingIndicator).not.toHaveBeenCalled();
+    expect(threadContextLoader.loadThread).not.toHaveBeenCalled();
+  });
+
+  it('lets an explicitly mentioned standby participant handle an A2A user reply', async () => {
+    const threadTs = '1712345678.000122';
+    const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_OTHER_BOT' })],
+    });
+
+    await handler({
+      client,
+      event: {
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> please take this part',
+        thread_ts: threadTs,
+        ts: '1712345678.000123',
+        type: 'message',
+        user: 'U123',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+  });
+
+  it('routes user replies that mention multiple A2A participants back to the lead', async () => {
+    const threadTs = '1712345678.000124';
+    const leadHarness = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+    });
+    const standbyHarness = createThreadReplyTestHarness(threadTs, {
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_OTHER_BOT' })],
+    });
+    const event = {
+      channel: 'C123',
+      team: 'T123',
+      text: '<@U_BOT> <@U_OTHER_BOT> who should take this?',
+      thread_ts: threadTs,
+      ts: '1712345678.000125',
+      type: 'message',
+      user: 'U123',
+    };
+
+    await leadHarness.handler({ client: leadHarness.client, event });
+    await standbyHarness.handler({ client: standbyHarness.client, event });
+
+    expect(
+      leadHarness.claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>,
+    ).toHaveBeenCalledOnce();
+    expect(
+      standbyHarness.claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>,
+    ).not.toHaveBeenCalled();
+  });
+
+  it('allows lead-authored A2A handoffs to wake a mentioned standby participant', async () => {
+    const threadTs = '1712345678.000126';
+    const a2aCoordinatorStore = new MemoryA2ACoordinatorStore();
+    const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+      a2aCoordinatorStore,
+      initialSessions: [createA2ASession(threadTs, { lead: 'U_OTHER_BOT' })],
+    });
+
+    await handler({
+      client,
+      event: {
+        bot_id: 'B_OTHER',
+        channel: 'C123',
+        team: 'T123',
+        text: '<@U_BOT> please handle the implementation',
+        thread_ts: threadTs,
+        ts: '1712345678.000127',
+        type: 'message',
+        user: 'U_OTHER_BOT',
+      },
+    });
+
+    expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+    expect(a2aCoordinatorStore.getAssignmentByTrigger(threadTs, '1712345678.000127')).toMatchObject(
+      {
+        agentStates: [{ agentId: 'U_BOT' }],
+        leadId: 'U_OTHER_BOT',
+      },
+    );
+  });
+
+  it('automatically wakes the lead to summarize after failed or stopped A2A assignees are terminal', async () => {
+    vi.useFakeTimers();
+    try {
+      const threadTs = '1712345678.000128';
+      const a2aCoordinatorStore = new MemoryA2ACoordinatorStore();
+      const assignment = a2aCoordinatorStore.createAssignment({
+        agentIds: ['U_OTHER_BOT', 'U_THIRD_BOT'],
+        channelId: 'C123',
+        leadId: 'U_BOT',
+        leadProviderId: 'claude-code',
+        threadTs,
+        triggerTs: '1712345678.000127',
+      });
+      a2aCoordinatorStore.markAgentTerminal(assignment.assignmentId, 'U_OTHER_BOT', 'failed');
+      a2aCoordinatorStore.markAgentTerminal(assignment.assignmentId, 'U_THIRD_BOT', 'stopped');
+      const { claudeExecutor, client, handler } = createThreadReplyTestHarness(threadTs, {
+        a2aCoordinatorStore,
+        initialSessions: [createA2ASession(threadTs, { lead: 'U_BOT' })],
+      });
+
+      await handler({
+        client,
+        event: {
+          bot_id: 'B_OTHER',
+          channel: 'C123',
+          team: 'T123',
+          text: 'A2A worker finished',
+          thread_ts: threadTs,
+          ts: '1712345678.000129',
+          type: 'message',
+          user: 'U_OTHER_BOT',
+        },
+      });
+      expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+
+      await vi.advanceTimersByTimeAsync(5_000);
+      await vi.runOnlyPendingTimersAsync();
+
+      expect(claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).toHaveBeenCalledOnce();
+      const [request] = (claudeExecutor.execute as unknown as ReturnType<typeof vi.fn>).mock
+        .calls[0]!;
+      expect(request.mentionText).toContain(`A2A_FINAL_SUMMARY ${assignment.assignmentId}`);
+      expect(request.mentionText).toContain('<@U_OTHER_BOT>: failed');
+      expect(request.mentionText).toContain('<@U_THIRD_BOT>: stopped');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('keeps direct co-mentioned app mentions on standby when another bot is first', async () => {
@@ -461,7 +704,11 @@ describe('thread reply ingress', () => {
 
 function createThreadReplyTestHarness(
   threadTs: string,
-  options: { agentTeams?: AgentTeamsConfig; initialSessions?: SessionRecord[] } = {},
+  options: {
+    a2aCoordinatorStore?: A2ACoordinatorStore;
+    agentTeams?: AgentTeamsConfig;
+    initialSessions?: SessionRecord[];
+  } = {},
 ): {
   claudeExecutor: AgentExecutor;
   client: SlackWebClientLike & {
@@ -516,6 +763,7 @@ function createThreadReplyTestHarness(
     }),
   } as unknown as WorkspaceResolver;
   const handler = createThreadReplyHandler({
+    a2aCoordinatorStore: options.a2aCoordinatorStore,
     analyticsStore: { upsert: vi.fn() } as unknown as SessionAnalyticsStore,
     agentTeams: options.agentTeams,
     channelPreferenceStore: { get: vi.fn().mockReturnValue(undefined), upsert: vi.fn() },
@@ -717,6 +965,22 @@ function createMemorySessionStore(records: SessionRecord[] = []): SessionStore {
       store.set(record.threadTs, next);
       return { ...next };
     },
+  };
+}
+
+function createA2ASession(
+  threadTs: string,
+  options: { lead: string; participants?: string[] },
+): SessionRecord {
+  return {
+    a2aLead: options.lead,
+    a2aParticipantsJson: JSON.stringify(options.participants ?? ['U_BOT', 'U_OTHER_BOT']),
+    channelId: 'C123',
+    conversationMode: 'a2a',
+    createdAt: new Date().toISOString(),
+    rootMessageTs: threadTs,
+    threadTs,
+    updatedAt: new Date().toISOString(),
   };
 }
 

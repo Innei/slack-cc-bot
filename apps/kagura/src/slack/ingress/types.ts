@@ -17,9 +17,12 @@ import type { SlackPermissionBridge } from '../interaction/permission-bridge.js'
 import type { SlackUserInputBridge } from '../interaction/user-input-bridge.js';
 import type { SlackRenderer } from '../render/slack-renderer.js';
 import type { SlackWebClientLike } from '../types.js';
+import type { A2ACoordinatorStore } from './a2a-coordinator-store.js';
+import type { A2AThreadContext } from './a2a-routing.js';
 import type { AgentTeamsConfig } from './agent-team-routing.js';
 
 export interface SlackIngressDependencies {
+  a2aCoordinatorStore?: A2ACoordinatorStore | undefined;
   agentTeams?: AgentTeamsConfig | undefined;
   analyticsStore: SessionAnalyticsStore;
   channelPreferenceStore: ChannelPreferenceStore;
@@ -54,7 +57,11 @@ export interface ThreadConversationMessage {
 }
 
 export interface ThreadConversationOptions {
+  a2aAssignmentId?: string | undefined;
+  a2aContext?: A2AThreadContext | undefined;
+  a2aSummaryAssignmentId?: string | undefined;
   addAcknowledgementReaction: boolean;
+  agentProviderOverride?: string | undefined;
   currentBotUserId?: string | undefined;
   currentBotUserName?: string | undefined;
   forceNewSession?: boolean;

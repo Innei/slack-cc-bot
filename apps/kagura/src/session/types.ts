@@ -1,7 +1,13 @@
 export interface SessionRecord {
+  a2aLead?: string | undefined;
+  a2aParticipantsJson?: string | undefined;
+  a2aPendingAssignments?: string | undefined;
+  a2aSummaryState?: string | undefined;
+  a2aTeamId?: string | undefined;
   agentProvider?: string | undefined;
   bootstrapMessageTs?: string | undefined;
   channelId: string;
+  conversationMode?: 'a2a' | 'general' | undefined;
   createdAt: string;
   lastTurnTriggerTs?: string | undefined;
   providerSessionId?: string | undefined;

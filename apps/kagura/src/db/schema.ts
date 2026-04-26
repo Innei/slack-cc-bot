@@ -9,6 +9,12 @@ export const sessions = sqliteTable('sessions', {
   // Physical column name is kept for backward compatibility with existing SQLite files.
   providerSessionId: text('claude_session_id'),
   agentProvider: text('agent_provider'),
+  conversationMode: text('conversation_mode', { enum: ['general', 'a2a'] }),
+  a2aLead: text('a2a_lead'),
+  a2aTeamId: text('a2a_team_id'),
+  a2aParticipantsJson: text('a2a_participants_json'),
+  a2aPendingAssignments: text('a2a_pending_assignments'),
+  a2aSummaryState: text('a2a_summary_state'),
   workspaceRepoId: text('workspace_repo_id'),
   workspaceRepoPath: text('workspace_repo_path'),
   workspacePath: text('workspace_path'),

@@ -71,6 +71,12 @@ export function createDatabase(dbPath: string) {
   ensureSessionsColumn(sqlite, 'workspace_label', 'TEXT');
   ensureSessionsColumn(sqlite, 'workspace_source', 'TEXT');
   ensureSessionsColumn(sqlite, 'agent_provider', 'TEXT');
+  ensureSessionsColumn(sqlite, 'conversation_mode', 'TEXT');
+  ensureSessionsColumn(sqlite, 'a2a_lead', 'TEXT');
+  ensureSessionsColumn(sqlite, 'a2a_team_id', 'TEXT');
+  ensureSessionsColumn(sqlite, 'a2a_participants_json', 'TEXT');
+  ensureSessionsColumn(sqlite, 'a2a_pending_assignments', 'TEXT');
+  ensureSessionsColumn(sqlite, 'a2a_summary_state', 'TEXT');
   ensureSessionsColumn(sqlite, 'last_turn_trigger_ts', 'TEXT');
 
   const db = drizzle(sqlite, { schema });

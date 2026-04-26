@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  getA2AContextFromSession,
+  resolveA2AThreadReplyDecision,
+} from '~/slack/ingress/a2a-routing.js';
+import {
   isParticipantInMentionedAgentTeam,
   parseSubteamMentions,
   parseUserMentions,
@@ -133,5 +137,43 @@ describe('agent team routing', () => {
         },
       }),
     ).toBe(true);
+  });
+
+  it('lets the A2A lead handle replies without explicit mentions', () => {
+    const context = getA2AContextFromSession({
+      a2aLead: 'U_LEAD',
+      a2aParticipantsJson: JSON.stringify(['U_LEAD', 'U_HELPER']),
+      conversationMode: 'a2a',
+    })!;
+
+    expect(resolveA2AThreadReplyDecision('continue', { userId: 'U_LEAD' }, context)).toMatchObject({
+      action: 'run',
+      reason: 'a2a_lead_default',
+    });
+    expect(
+      resolveA2AThreadReplyDecision('continue', { userId: 'U_HELPER' }, context),
+    ).toMatchObject({
+      action: 'standby',
+      reason: 'a2a_non_lead_default',
+    });
+  });
+
+  it('keeps user multi-agent mentions assigned to the A2A lead', () => {
+    const context = getA2AContextFromSession({
+      a2aLead: 'U_LEAD',
+      a2aParticipantsJson: JSON.stringify(['U_LEAD', 'U_HELPER', 'U_OTHER']),
+      conversationMode: 'a2a',
+    })!;
+
+    expect(
+      resolveA2AThreadReplyDecision(
+        '<@U_HELPER> <@U_OTHER> who goes first?',
+        { userId: 'U_LEAD' },
+        context,
+      ),
+    ).toMatchObject({
+      action: 'run',
+      reason: 'a2a_lead_default',
+    });
   });
 });

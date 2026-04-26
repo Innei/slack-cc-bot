@@ -34,6 +34,12 @@ export class SqliteSessionStore implements SessionStore {
         streamMessageTs: record.streamMessageTs ?? null,
         providerSessionId: record.providerSessionId ?? null,
         agentProvider: record.agentProvider ?? null,
+        conversationMode: record.conversationMode ?? null,
+        a2aLead: record.a2aLead ?? null,
+        a2aTeamId: record.a2aTeamId ?? null,
+        a2aParticipantsJson: record.a2aParticipantsJson ?? null,
+        a2aPendingAssignments: record.a2aPendingAssignments ?? null,
+        a2aSummaryState: record.a2aSummaryState ?? null,
         workspaceRepoId: record.workspaceRepoId ?? null,
         workspaceRepoPath: record.workspaceRepoPath ?? null,
         workspacePath: record.workspacePath ?? null,
@@ -52,6 +58,12 @@ export class SqliteSessionStore implements SessionStore {
           streamMessageTs: record.streamMessageTs ?? null,
           providerSessionId: record.providerSessionId ?? null,
           agentProvider: record.agentProvider ?? null,
+          conversationMode: record.conversationMode ?? null,
+          a2aLead: record.a2aLead ?? null,
+          a2aTeamId: record.a2aTeamId ?? null,
+          a2aParticipantsJson: record.a2aParticipantsJson ?? null,
+          a2aPendingAssignments: record.a2aPendingAssignments ?? null,
+          a2aSummaryState: record.a2aSummaryState ?? null,
           workspaceRepoId: record.workspaceRepoId ?? null,
           workspaceRepoPath: record.workspaceRepoPath ?? null,
           workspacePath: record.workspacePath ?? null,
@@ -90,6 +102,12 @@ export class SqliteSessionStore implements SessionStore {
         streamMessageTs: next.streamMessageTs ?? null,
         providerSessionId: next.providerSessionId ?? null,
         agentProvider: next.agentProvider ?? null,
+        conversationMode: next.conversationMode ?? null,
+        a2aLead: next.a2aLead ?? null,
+        a2aTeamId: next.a2aTeamId ?? null,
+        a2aParticipantsJson: next.a2aParticipantsJson ?? null,
+        a2aPendingAssignments: next.a2aPendingAssignments ?? null,
+        a2aSummaryState: next.a2aSummaryState ?? null,
         workspaceRepoId: next.workspaceRepoId ?? null,
         workspaceRepoPath: next.workspaceRepoPath ?? null,
         workspacePath: next.workspacePath ?? null,
@@ -116,6 +134,14 @@ export class SqliteSessionStore implements SessionStore {
     };
     if (row.bootstrapMessageTs !== null) record.bootstrapMessageTs = row.bootstrapMessageTs;
     if (row.providerSessionId !== null) record.providerSessionId = row.providerSessionId;
+    if (row.conversationMode !== null) record.conversationMode = row.conversationMode;
+    if (row.a2aLead !== null) record.a2aLead = row.a2aLead;
+    if (row.a2aTeamId !== null) record.a2aTeamId = row.a2aTeamId;
+    if (row.a2aParticipantsJson !== null) record.a2aParticipantsJson = row.a2aParticipantsJson;
+    if (row.a2aPendingAssignments !== null) {
+      record.a2aPendingAssignments = row.a2aPendingAssignments;
+    }
+    if (row.a2aSummaryState !== null) record.a2aSummaryState = row.a2aSummaryState;
     if (row.streamMessageTs !== null) record.streamMessageTs = row.streamMessageTs;
     if (row.workspaceRepoId !== null) record.workspaceRepoId = row.workspaceRepoId;
     if (row.workspaceRepoPath !== null) record.workspaceRepoPath = row.workspaceRepoPath;

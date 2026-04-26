@@ -49,6 +49,7 @@ const appConfigSchema = z
     repoRootDir: z.string().optional(),
     repoScanDepth: z.number().int().min(0).optional(),
     sessionDbPath: z.string().optional(),
+    a2aCoordinatorDbPath: z.string().optional(),
     slackConfigTokenStorePath: z.string().optional(),
   })
   .strict();
@@ -127,6 +128,7 @@ export const env = createEnv({
     REPO_ROOT_DIR: z.string().min(1),
     REPO_SCAN_DEPTH: z.coerce.number().int().min(0).default(2),
     SESSION_DB_PATH: z.string().min(1).default('./data/sessions.db'),
+    A2A_COORDINATOR_DB_PATH: z.string().min(1).default('./data/a2a-coordinator.db'),
     SLACK_E2E_ENABLED: booleanStringSchema.default(false),
     SLACK_E2E_CHANNEL_ID: z.string().min(1).optional(),
     SLACK_E2E_RESULT_PATH: z.string().min(1).default('./artifacts/slack-live-e2e/result.json'),
@@ -176,6 +178,10 @@ export const env = createEnv({
     REPO_ROOT_DIR: envOrConfig('REPO_ROOT_DIR', configString(appConfig.repoRootDir)),
     REPO_SCAN_DEPTH: envOrConfig('REPO_SCAN_DEPTH', configNumber(appConfig.repoScanDepth)),
     SESSION_DB_PATH: envOrConfig('SESSION_DB_PATH', configString(appConfig.sessionDbPath)),
+    A2A_COORDINATOR_DB_PATH: envOrConfig(
+      'A2A_COORDINATOR_DB_PATH',
+      configString(appConfig.a2aCoordinatorDbPath),
+    ),
     SLACK_E2E_ENABLED: process.env.SLACK_E2E_ENABLED,
     SLACK_E2E_CHANNEL_ID: process.env.SLACK_E2E_CHANNEL_ID,
     SLACK_E2E_RESULT_PATH: process.env.SLACK_E2E_RESULT_PATH,
