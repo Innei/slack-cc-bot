@@ -54,17 +54,5 @@
   "packageManager": "pnpm@11.0.0",
   "engines": {
     "node": ">=22.0.0"
-  },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "esbuild",
-      "simple-git-hooks",
-      "unrs-resolver",
-      "better-sqlite3"
-    ],
-    "overrides": {
-      "@esbuild-kit/core-utils>esbuild": "0.25.12",
-      "vite": "8.0.10"
-    }
   }
 }
